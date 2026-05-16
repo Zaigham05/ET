@@ -1738,13 +1738,22 @@ class SpendWise {
         reader.onload = (e) => {
             try {
                 const data = JSON.parse(e.target.result);
-                if (data.transactions) localStorage.setItem('transactions', JSON.stringify(data.transactions));
-                if (data.categories) localStorage.setItem('categories', JSON.stringify(data.categories));
-                if (data.budget) localStorage.setItem('monthlyBudget', JSON.stringify(data.budget));
-                if (data.settings) localStorage.setItem('settings', JSON.stringify(data.settings));
+                
+                // Load into local memory first
+                this.transactions = data.transactions || [];
+                this.categories = data.categories || this.categories;
+                this.budget = data.budget || 0;
+                this.settings = data.settings || this.settings;
 
-                this.showToast('Backup restored successfully!', 'success');
-                setTimeout(() => window.location.reload(), 1500);
+                // Force sequential indexing before sync
+                this.reindexTransactions();
+
+                // Save to local and CRITICAL: Force Push to Cloud
+                this.saveToLocal();
+                this.saveToCloud();
+
+                this.showToast('Vault restored! Syncing to cloud...', 'success');
+                setTimeout(() => window.location.reload(), 2000);
             } catch (err) {
                 this.showToast('Invalid backup file!', 'error');
             }
