@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpendWise | Premium Spend Analysis</title>
+    <meta name="description" content="A premium spend analysis dashboard for tracking expenses in PKR with real-time analytics.">
+    <!-- Google Fonts: Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo-container">
+                <div class="logo-icon">
+                    <i data-lucide="wallet"></i>
+                </div>
+                <h1>SpendWise</h1>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-link active" id="nav-dashboard">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-link" id="nav-transactions">
+                    <i data-lucide="list"></i>
+                    <span>Transactions</span>
+                </a>
+                <a href="#" class="nav-link" id="nav-categories">
+                    <i data-lucide="tag"></i>
+                    <span>Categories</span>
+                </a>
+                <a href="#" class="nav-link" id="nav-analytics">
+                    <i data-lucide="line-chart"></i>
+                    <span>Analytics</span>
+                </a>
+                <a href="#" class="nav-link" id="nav-debt">
+                    <i data-lucide="landmark"></i>
+                    <span>Debt Vault</span>
+                </a>
+                <a href="#" class="nav-link" id="nav-audit">
+                    <i data-lucide="clipboard-list"></i>
+                    <span>Audit Vault</span>
+                </a>
+                <a href="#" class="nav-link" id="nav-calendar">
+                    <i data-lucide="calendar"></i>
+                    <span>Calendar Vault</span>
+                </a>
+                <a href="#" class="nav-link" id="nav-settings">
+                    <i data-lucide="settings"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            <div class="user-profile">
+                <div class="avatar">MH</div>
+                <div class="user-info">
+                    <p class="user-name">Mr Hacker</p>
+                    <p class="user-status">Premium Plan</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header glass">
+                <div class="header-left">
+                    <div class="view-title-box">
+                        <h1 id="active-view-title">Dashboard</h1>
+                        <div class="greeting-row">
+                            <span id="user-greeting">Good Afternoon, User!</span>
+                            <span class="dot-separator">•</span>
+                            <span id="current-date-display">Sunday, 10 May</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div id="sync-status" class="sync-badge offline">
+                        <span class="pulse-dot"></span>
+                        <span class="status-text">Offline</span>
+                    </div>
+                    <div class="period-selector glass">
+                        <i data-lucide="calendar"></i>
+                        <select id="global-month-selector">
+                            <!-- Dynamic months -->
+                        </select>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn-primary pulse" id="add-expense-btn">
+                            <i data-lucide="plus"></i>
+                            <span>Add Transaction</span>
+                        </button>
+                        <button class="icon-btn">
+                            <i data-lucide="bell"></i>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard View -->
+            <section id="view-dashboard" class="view active">
+                <div class="dashboard-grid">
+                    <!-- Summary Cards -->
+                    <div class="stats-grid">
+                        <div class="stat-card glass">
+                            <div class="stat-icon income">
+                                <i data-lucide="wallet"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Total Income</h3>
+                                <p class="stat-value" id="total-income">PKR 0</p>
+                                <span class="stat-change positive">Actual Money In</span>
+                            </div>
+                        </div>
+                        <div class="stat-card glass">
+                            <div class="stat-icon expense">
+                                <i data-lucide="trending-down"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Total Spent</h3>
+                                <p class="stat-value" id="total-spent">PKR 0</p>
+                                <span class="stat-change negative" id="spent-percentage">0% of budget</span>
+                            </div>
+                        </div>
+                        <div class="stat-card glass">
+                            <div class="stat-icon balance" style="background: rgba(0, 229, 255, 0.1); color: var(--primary);">
+                                <i data-lucide="banknote"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Cash in Hand</h3>
+                                <p class="stat-value" id="cash-in-hand">PKR 0</p>
+                                <span class="stat-change positive">Current Liquidity</span>
+                            </div>
+                        </div>
+                        <div class="stat-card glass clickable" id="budget-card">
+                            <div class="stat-icon budget">
+                                <i data-lucide="target"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Spending Budget</h3>
+                                <p class="stat-value" id="total-budget">PKR 0</p>
+                                <span class="stat-change neutral">Set Goal</span>
+                            </div>
+                        </div>
+                        <div class="stat-card glass">
+                            <div class="stat-icon balance">
+                                <i data-lucide="landmark"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Lent / Debt</h3>
+                                <p class="stat-value" id="debt-balance">PKR 0</p>
+                                <span class="stat-change neutral" id="debt-status">No active lends</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Row -->
+                    <div class="charts-row">
+                        <div class="chart-container glass large">
+                            <div class="chart-header">
+                                <h3>Spending Trends</h3>
+                                <div class="chart-actions">
+                                    <select id="trend-period" class="period-selector-mini">
+                                        <option value="week">Weekly</option>
+                                        <option value="month">Monthly</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="trendsChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-container glass small">
+                            <div class="chart-header">
+                                <h3>Category Split</h3>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="categoryChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- Full Transactions View -->
+            <section id="view-transactions" class="view">
+                <div class="section-header">
+                    <h2>Transaction History</h2>
+                    <div class="filter-bar glass">
+                        <div class="results-counter" id="transaction-count">Showing 0 records</div>
+                        <div class="search-input">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="transaction-search" placeholder="Search notes...">
+                        </div>
+                        <select id="filter-category">
+                            <option value="all">All Categories</option>
+                        </select>
+                        <select id="filter-type">
+                            <option value="all">All Types</option>
+                            <option value="Income">Income</option>
+                            <option value="Expense">Expense</option>
+                            <option value="Lend">Lend</option>
+                            <option value="Repay">Repay</option>
+                        </select>
+                        <div class="export-actions">
+                            <button class="action-btn" id="export-csv" title="Export CSV">
+                                <i data-lucide="file-spreadsheet"></i>
+                            </button>
+                            <button class="action-btn" id="export-pdf" title="Export PDF">
+                                <i data-lucide="file-text"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="transaction-list glass" id="full-transaction-list">
+                    <!-- Loaded dynamically -->
+                </div>
+            </section>
+
+            <!-- Categories View -->
+            <section id="view-categories" class="view">
+                <div class="section-header">
+                    <h2>Category Management</h2>
+                    <button class="btn-primary" id="add-category-btn">
+                        <i data-lucide="plus"></i>
+                        <span>Add Category</span>
+                    </button>
+                </div>
+                <div class="category-grid" id="category-list">
+                    <!-- Categories loaded dynamically -->
+                </div>
+            </section>
+
+            <section id="view-analytics" class="view">
+                <div class="section-header">
+                    <h2>Financial Intelligence</h2>
+                    <p class="text-muted">In-depth analysis of your spending patterns</p>
+                </div>
+
+                <!-- Extended Analytics Summary -->
+                <div class="analytics-summary-grid">
+                    <div class="summary-stat glass">
+                        <span class="label">Daily Average</span>
+                        <h4 id="stat-daily-avg">PKR 0</h4>
+                        <p class="stat-trend" id="stat-daily-trend">This Month</p>
+                    </div>
+                    <div class="summary-stat glass">
+                        <span class="label">Monthly Forecast</span>
+                        <h4 id="stat-forecast">PKR 0</h4>
+                        <p class="stat-trend">Based on trend</p>
+                    </div>
+                    <div class="summary-stat glass">
+                        <span class="label">Weekly Pace</span>
+                        <h4 id="stat-pace-percent">0%</h4>
+                        <p class="stat-trend" id="stat-pace-msg">Spending velocity</p>
+                    </div>
+                    <div class="summary-stat glass">
+                        <span class="label">Peak Spending</span>
+                        <h4 id="stat-peak-amount">PKR 0</h4>
+                        <p class="stat-trend" id="stat-peak-day">No data</p>
+                    </div>
+                </div>
+
+                <!-- Insights Row -->
+                <div class="analytics-insights-row">
+                    <div class="insight-card glass">
+                        <div class="chart-header">
+                            <h3>Savings Efficiency</h3>
+                        </div>
+                        <div class="efficiency-container">
+                            <div class="efficiency-ring" id="efficiency-ring">
+                                <svg viewBox="0 0 36 36">
+                                    <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                    <path class="ring-fill" id="efficiency-fill" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                </svg>
+                                <div class="efficiency-value">
+                                    <span id="efficiency-percent">0%</span>
+                                    <label>Saved</label>
+                                </div>
+                            </div>
+                            <div class="efficiency-details">
+                                <p id="efficiency-msg">Keep it up!</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="insight-card glass">
+                        <div class="chart-header">
+                            <h3>Top Spending Categories</h3>
+                        </div>
+                        <div class="top-categories-list" id="top-categories-list">
+                            <!-- Loaded dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Recommendations Section -->
+                <div class="ai-strategy-center">
+                    <div class="section-header">
+                        <div style="display:flex; align-items:center; gap:0.75rem;">
+                            <div class="ai-icon-pulse">
+                                <i data-lucide="sparkles"></i>
+                            </div>
+                            <div>
+                                <h3>AI Strategy Center</h3>
+                                <p class="text-muted" style="font-size: 0.75rem;">Smart suggestions to optimize your spending</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-recommendations-grid" id="ai-recommends-list">
+                        <!-- AI Insights loaded here -->
+                        <div class="empty-state">
+                            <p>Analyzing your data to provide smart insights...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Debt Vault View -->
+            <section id="view-debt" class="view">
+                <div class="section-header">
+                    <h2>Debt Vault</h2>
+                    <p class="text-muted">Track your lends, borrows, and repayments by person</p>
+                </div>
+                <div class="debt-grid" id="debt-person-list">
+                    <!-- Loaded dynamically -->
+                </div>
+            </section>
+
+            <!-- Audit View -->
+            <section id="view-audit" class="view">
+                <div class="section-header">
+                    <h2>Audit Vault</h2>
+                    <button class="btn-secondary" id="clear-audit-btn">
+                        <i data-lucide="trash-2"></i>
+                        <span>Clear Log</span>
+                    </button>
+                </div>
+                <div class="audit-log-container glass" id="audit-log-list">
+                    <!-- Audit items loaded dynamically -->
+                </div>
+            </section>
+
+            <!-- Calendar View -->
+            <section id="view-calendar" class="view">
+                <div class="section-header">
+                    <h2>Calendar Vault</h2>
+                    <p class="text-muted">Daily spending footprint</p>
+                </div>
+                <div class="calendar-container glass">
+                    <div class="calendar-header-days">
+                        <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
+                    </div>
+                    <div id="calendar-grid" class="calendar-grid">
+                        <!-- Calendar days loaded dynamically -->
+                    </div>
+                </div>
+                <div id="day-detail-modal" class="day-detail-overlay">
+                    <div class="day-detail-content glass">
+                        <div class="modal-header">
+                            <h3 id="detail-date-title">Transactions</h3>
+                            <button class="close-detail">&times;</button>
+                        </div>
+                        <div id="day-transactions-list" class="transaction-list"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings View (The Command Center) -->
+            <section id="view-settings" class="view">
+                <div class="settings-grid">
+                    <!-- Theme Vault Card -->
+                    <div class="glass settings-card">
+                        <div class="card-header">
+                            <i data-lucide="sparkles"></i>
+                            <h3>Theme Vault</h3>
+                        </div>
+                        <div class="theme-selector-grid" style="grid-template-columns: repeat(2, 1fr);">
+                            <div class="theme-option" id="theme-light" onclick="app.setTheme('light')">
+                                <div class="theme-preview light" style="background: #f8fafc; border: 1px solid #e2e8f0;"></div>
+                                <span>Light Mode</span>
+                            </div>
+                            <div class="theme-option active" id="theme-dark" onclick="app.setTheme('dark')">
+                                <div class="theme-preview dark" style="background: #0a0c10; border: 1px solid #1e293b;"></div>
+                                <span>Dark Mode</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Profile Card -->
+                    <div class="glass settings-card">
+                        <div class="card-header">
+                            <i data-lucide="user"></i>
+                            <h3>Identity Control</h3>
+                        </div>
+                        <div class="form-group">
+                            <label>Profile Name</label>
+                            <input type="text" id="settings-username" value="Mr Hacker">
+                        </div>
+                        <button class="btn-primary" onclick="app.updateProfile()">Update Profile</button>
+                    </div>
+
+                    <!-- Appearance Card -->
+                    <div class="glass settings-card">
+                        <div class="card-header">
+                            <i data-lucide="palette"></i>
+                            <h3>Visual Overdrive</h3>
+                        </div>
+                        <label>Accent Color</label>
+                        <div class="color-presets">
+                            <div class="color-swatch active" style="background: #00e5ff;" onclick="app.setAccent('#00e5ff', this)" title="Cyan"></div>
+                            <div class="color-swatch" style="background: #7000ff;" onclick="app.setAccent('#7000ff', this)" title="Purple"></div>
+                            <div class="color-swatch" style="background: #ff0055;" onclick="app.setAccent('#ff0055', this)" title="Rose"></div>
+                            <div class="color-swatch" style="background: #00ff88;" onclick="app.setAccent('#00ff88', this)" title="Emerald"></div>
+                        </div>
+                    </div>
+
+                    <!-- Data Vault Card -->
+                    <div class="glass settings-card">
+                        <div class="card-header">
+                            <i data-lucide="database"></i>
+                            <h3>Data Vault</h3>
+                        </div>
+                        <div class="data-actions">
+                            <button class="btn-secondary" onclick="app.exportBackup()">
+                                <i data-lucide="download"></i> Backup Data
+                            </button>
+                            <button class="btn-secondary" onclick="document.getElementById('import-file').click()">
+                                <i data-lucide="upload"></i> Restore Data
+                            </button>
+                            <input type="file" id="import-file" style="display: none;" onchange="app.importBackup(this)">
+                            <button class="btn-danger" onclick="app.resetEverything()">
+                                <i data-lucide="trash-2"></i> Nuclear Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- New Dedicated Mobile Navigation -->
+    <nav class="mobile-nav">
+        <div class="mobile-nav-inner">
+            <a href="javascript:void(0)" class="mobile-tab active" onclick="app.switchView('dashboard')">
+                <i data-lucide="layout-dashboard"></i>
+                <span>Home</span>
+            </a>
+            <a href="javascript:void(0)" class="mobile-tab" onclick="app.switchView('transactions')">
+                <i data-lucide="list"></i>
+                <span>History</span>
+            </a>
+            
+            <div class="mobile-fab" onclick="app.toggleModal(app.expenseModal, true)">
+                <i data-lucide="plus"></i>
+            </div>
+            
+            <a href="javascript:void(0)" class="mobile-tab" onclick="app.switchView('analytics')">
+                <i data-lucide="pie-chart"></i>
+                <span>Stats</span>
+            </a>
+            <a href="javascript:void(0)" class="mobile-tab" onclick="app.switchView('settings')">
+                <i data-lucide="settings"></i>
+                <span>Settings</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Modal for Adding Expense -->
+    <div id="expense-modal" class="modal">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2>Add New Expense</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <form id="transaction-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="type">Type</label>
+                        <select id="type" required>
+                            <option value="Expense">Expense (Out)</option>
+                            <option value="Income">Income (In)</option>
+                            <option value="Lend">Lend (Money Out)</option>
+                            <option value="Repay">Repay (In from Lend)</option>
+                            <option value="Borrow">Borrow (Money In)</option>
+                            <option value="Payback">Payback (Out for Loan)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="amount">Amount (PKR) <span id="calc-result" class="calc-badge"></span></label>
+                        <input type="text" id="amount" placeholder="e.g. 500+250" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="category">Category</label>
+                    <select id="category" required>
+                        <option value="Salary">Salary</option>
+                        <option value="Food">Food & Dining</option>
+                        <option value="Transport">Transportation</option>
+                        <option value="Housing">Housing & Rent</option>
+                        <option value="Tech">Tech & Subscriptions</option>
+                        <option value="Entertainment">Entertainment</option>
+                        <option value="Debt">Lending / Debt</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="date">Date</label>
+                    <input type="date" id="date" required>
+                </div>
+                <div class="form-group">
+                    <label for="note">Note (Optional)</label>
+                    <input type="text" id="note" placeholder="e.g. Dinner with friends">
+                </div>
+                <div class="form-group" id="person-group">
+                    <label for="person">Person / Entity (Optional)</label>
+                    <div id="smart-person-selector" class="smart-chips-container"></div>
+                    <input type="text" id="person" placeholder="e.g. Ali, Bank, etc.">
+                </div>
+                <div class="form-group" id="due-date-group" style="display: none;">
+                    <label for="due-date">Due Date (Optional)</label>
+                    <input type="date" id="due-date">
+                </div>
+                <button type="submit" class="btn-submit">Add Transaction</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Setting Budget -->
+    <div id="budget-modal" class="modal">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2>Set Monthly Budget</h2>
+                <button class="close-modal" id="close-budget-modal">&times;</button>
+            </div>
+            <form id="budget-form">
+                <div class="form-group">
+                    <label for="budget-amount">Budget Goal (PKR)</label>
+                    <input type="number" id="budget-amount" placeholder="e.g. 50000" required>
+                </div>
+                <button type="submit" class="btn-submit">Save Budget</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Adding/Editing Category -->
+    <div id="category-modal" class="modal">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2 id="category-modal-title">Add New Category</h2>
+                <button class="close-modal" id="close-category-modal">&times;</button>
+            </div>
+            <form id="category-form">
+                <div class="form-group">
+                    <label for="cat-name">Category Name</label>
+                    <input type="text" id="cat-name" placeholder="e.g. Shopping" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cat-icon">Icon Name</label>
+                        <div class="icon-input-group">
+                            <input type="text" id="cat-icon" placeholder="e.g. heart" required>
+                            <button type="button" class="icon-btn-small" id="open-icon-picker" title="Browse Icons">
+                                <i data-lucide="search"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="cat-color">Color</label>
+                        <input type="color" id="cat-color" value="#00e5ff">
+                    </div>
+                </div>
+                <p class="form-hint">Tip: Use icon names from <a href="https://lucide.dev/icons" target="_blank">lucide.dev</a></p>
+                <button type="submit" class="btn-submit" id="category-submit-btn">Add Category</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Icon Picker -->
+    <div id="icon-picker-modal" class="modal">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2>Choose Icon</h2>
+                <button class="close-modal" id="close-icon-picker">&times;</button>
+            </div>
+            <div class="search-input" style="width: 100%; margin-bottom: 1.5rem;">
+                <i data-lucide="search"></i>
+                <input type="text" id="icon-search" placeholder="Search icons...">
+            </div>
+            <div id="icon-grid" class="icon-grid-container">
+                <!-- Icons loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Modal for Confirmation -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content glass confirm-content">
+            <div class="confirm-body">
+                <div class="confirm-icon-box">
+                    <i data-lucide="help-circle" id="confirm-type-icon"></i>
+                </div>
+                <h2 id="confirm-title">Confirm Action</h2>
+                <p id="confirm-message">Are you sure you want to proceed?</p>
+            </div>
+            <div class="confirm-actions">
+                <button class="btn-secondary" id="confirm-cancel">Cancel</button>
+                <button class="btn-primary" id="confirm-ok" style="margin-top: 0;">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Integration -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="script.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
