@@ -107,15 +107,24 @@ class SpendWise {
         vaultRef.once('value', (snapshot) => {
             const cloudData = snapshot.val();
             if (cloudData) {
+                console.log("📥 Loading existing Cloud Data...");
                 this.transactions = cloudData.transactions || [];
                 this.budget = cloudData.budget || 0;
                 this.categories = cloudData.categories || this.categories;
                 this.settings = cloudData.settings || this.settings;
                 this.auditLog = cloudData.auditLog || [];
-
+                
+                // FORCE RE-INDEX ON SYNC to ensure strict 1..N order
+                this.reindexTransactions();
+                
                 this.saveToLocal();
                 this.updateUI();
                 this.showToast("Cloud Vault Synced", "success");
+            } else {
+                // CLOUD IS EMPTY - This is likely the first time connection
+                console.log("📤 Cloud is empty. Performing initial upload...");
+                this.saveToCloud(); // Push local data to the new cloud vault
+                this.showToast("Initial Cloud Backup Created!", "success");
             }
         });
 
@@ -147,16 +156,36 @@ class SpendWise {
 
     saveToCloud() {
         if (!this.isLive) return;
-
+        
         this.db.ref(`vaults/${this.vaultId}`).set({
             transactions: this.transactions,
             budget: this.budget,
             categories: this.categories,
             settings: this.settings,
             auditLog: this.auditLog,
+            lastTransactionId: this.lastTransactionId,
             lastUpdateBy: 'self',
             timestamp: firebase.database.ServerValue.TIMESTAMP
         });
+    }
+
+    reindexTransactions() {
+        if (!this.transactions || this.transactions.length === 0) {
+            this.lastTransactionId = 0;
+            return;
+        }
+
+        // Sort by date ascending to assign IDs 1...N in order of time
+        this.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        this.transactions.forEach((t, index) => {
+            t.id = index + 1;
+        });
+
+        this.lastTransactionId = this.transactions.length;
+
+        // Sort back to descending (Newest first) for the UI
+        this.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
     }
 
     cacheDOM() {
@@ -850,7 +879,6 @@ class SpendWise {
         e.preventDefault();
 
         let amountVal = document.getElementById('amount').value;
-        // Evaluate if it's a math expression
         try {
             if (/[+\-*/]/.test(amountVal)) {
                 amountVal = Function(`'use strict'; return (${amountVal})`)();
@@ -862,7 +890,7 @@ class SpendWise {
         }
 
         const t = {
-            id: this.editingId || null,
+            id: null, // Will be set below
             type: document.getElementById('type').value,
             amount: amountVal,
             category: document.getElementById('category').value,
@@ -877,19 +905,21 @@ class SpendWise {
             const index = this.transactions.findIndex(item => item.id === this.editingId);
             if (index !== -1) {
                 const old = this.transactions[index];
-                this.logAction('EDIT', `Transaction #${t.id}: ${old.note || old.category}`, `Updated transaction details.`, {
+                this.logAction('EDIT', `Transaction #${t.id}`, `Updated record.`, {
                     from: `${this.formatCurrency(old.amount)} (${old.type})`,
                     to: `${this.formatCurrency(t.amount)} (${t.type})`
                 });
                 this.transactions[index] = t;
             }
-            this.showToast('Transaction updated successfully!', 'success');
+            this.showToast('Transaction updated!', 'success');
         } else {
+            // STRICT SEQUENTIAL ID
+            this.reindexTransactions(); // Ensure existing sequence is clean
             this.lastTransactionId++;
             t.id = this.lastTransactionId;
-            localStorage.setItem('lastTransactionId', this.lastTransactionId);
+            
             this.transactions.unshift(t);
-            this.logAction('CREATE', `Transaction #${t.id}: ${t.note || t.category}`, `Added new ${t.type} of ${this.formatCurrency(t.amount)}.`);
+            this.logAction('CREATE', `Transaction #${t.id}`, `Added ${t.type} of ${this.formatCurrency(t.amount)}.`);
             this.showToast('Transaction added!', 'success');
         }
 
