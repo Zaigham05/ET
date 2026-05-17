@@ -20,12 +20,182 @@ class SpendWise {
         };
 
         this.db = null;
-        this.vaultId = 'spendwise-4547a-vault'; // Using a unique ID based on your project
+        this.vaultId = null; // Will be set after login
         this.isLive = false;
+        
+        this.currentUser = null;
+        this.authMode = 'login';
+        this.users = JSON.parse(localStorage.getItem('spendwise_users')) || {};
 
-        // Initialize Local State
-        this.transactions = JSON.parse(localStorage.getItem('transactions')) || [];
-        this.budget = parseFloat(localStorage.getItem('monthlyBudget')) || 0;
+        // Default empty state before login
+        this.transactions = [];
+        this.budget = 0;
+        this.categories = {};
+        this.settings = {};
+        this.editingId = null;
+        this.editingCategoryId = null;
+        this.auditLog = [];
+        this.lastTransactionId = 0;
+
+        // Check for active session using Firebase Auth
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('main-sidebar').style.display = 'none';
+            
+            try {
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(this.firebaseConfig);
+                }
+                this.auth = firebase.auth();
+                this.db = firebase.database();
+                
+                this.auth.onAuthStateChanged((user) => {
+                    if (user) {
+                        this.currentUser = user;
+                        this.vaultId = 'spendwise-' + user.uid + '-vault';
+
+                        // --- Universal Legacy Data Migration ---
+                        const legacyTx = localStorage.getItem('transactions');
+                        if (legacyTx) {
+                            const prefix = user.uid + '_';
+                            ['transactions', 'monthlyBudget', 'categories', 'settings', 'auditLog', 'lastTransactionId'].forEach(key => {
+                                const val = localStorage.getItem(key);
+                                if (val !== null) localStorage.setItem(prefix + key, val);
+                                localStorage.removeItem(key); // Clear legacy to prevent duplication
+                            });
+                            console.log("Universal Migration: Legacy single-user data moved to new secure vault.");
+                        }
+
+                        this.loadData();
+                        document.getElementById('auth-portal').classList.add('hidden');
+                        document.getElementById('main-sidebar').style.display = 'flex';
+                        this.init(); // Bind events and start sync
+                    } else {
+                        this.currentUser = null;
+                        document.getElementById('main-sidebar').style.display = 'none';
+                        document.getElementById('auth-portal').classList.remove('hidden');
+                    }
+                });
+            } catch (err) {
+                console.error("Firebase Auth Init Failed:", err);
+            }
+        });
+    }
+
+    togglePasswordVisibility() {
+        const passwordInput = document.getElementById('auth-password');
+        const eyeIcon = document.getElementById('password-eye-icon');
+        
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            eyeIcon.setAttribute('data-lucide', 'eye-off');
+        } else {
+            passwordInput.type = 'password';
+            eyeIcon.setAttribute('data-lucide', 'eye');
+        }
+        if (window.lucide) lucide.createIcons();
+    }
+
+    toggleGenericPassword(inputId, iconId) {
+        const passwordInput = document.getElementById(inputId);
+        const eyeIcon = document.getElementById(iconId);
+        
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            eyeIcon.setAttribute('data-lucide', 'eye-off');
+        } else {
+            passwordInput.type = 'password';
+            eyeIcon.setAttribute('data-lucide', 'eye');
+        }
+        if (window.lucide) lucide.createIcons();
+    }
+
+    switchAuthMode(mode) {
+        this.authMode = mode;
+        document.querySelectorAll('.auth-tab').forEach(tab => tab.classList.remove('active'));
+        document.getElementById(`tab-${mode}`).classList.add('active');
+        document.getElementById('auth-submit-btn').textContent = mode === 'login' ? 'Access Vault' : 'Create Vault';
+        document.getElementById('auth-error').style.display = 'none';
+        
+        const forgotLink = document.getElementById('forgot-password-link');
+        if (forgotLink) forgotLink.style.display = mode === 'login' ? 'inline' : 'none';
+    }
+
+    async forgotPassword(e) {
+        e.preventDefault();
+        const email = document.getElementById('auth-email').value;
+        const errorEl = document.getElementById('auth-error');
+        
+        if (!email) {
+            errorEl.textContent = 'Please enter your email address first.';
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        try {
+            await this.auth.sendPasswordResetEmail(email);
+            errorEl.style.display = 'none';
+            this.showToast(`A password reset link has been sent to ${email}`, 'success');
+        } catch (error) {
+            errorEl.textContent = error.message;
+            errorEl.style.display = 'block';
+        }
+    }
+
+    async handleAuthSubmit(e) {
+        e.preventDefault();
+        const email = document.getElementById('auth-email').value;
+        const password = document.getElementById('auth-password').value;
+        const errorEl = document.getElementById('auth-error');
+        const submitBtn = document.getElementById('auth-submit-btn');
+
+        errorEl.style.display = 'none';
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Processing...';
+
+        try {
+            if (this.authMode === 'register') {
+                await this.auth.createUserWithEmailAndPassword(email, password);
+                // Profile setup & migration happens implicitly in onAuthStateChanged
+            } else {
+                await this.auth.signInWithEmailAndPassword(email, password);
+            }
+        } catch (error) {
+            if (error.code === 'auth/configuration-not-found') {
+                errorEl.innerHTML = `<strong>Setup Required:</strong><br>1. Go to your <a href="https://console.firebase.google.com/" target="_blank" style="color: #00e5ff;">Firebase Console</a><br>2. Click <strong>Authentication</strong> > <strong>Get Started</strong><br>3. Enable <strong>Email/Password</strong> provider.`;
+            } else {
+                errorEl.textContent = error.message;
+            }
+            errorEl.style.display = 'block';
+            submitBtn.disabled = false;
+            submitBtn.textContent = this.authMode === 'login' ? 'Access Vault' : 'Create Vault';
+        }
+    }
+
+    async googleSignIn() {
+        const errorEl = document.getElementById('auth-error');
+        errorEl.style.display = 'none';
+
+        try {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            await this.auth.signInWithPopup(provider);
+            // Redirection and universal migration handled by onAuthStateChanged
+        } catch (error) {
+            errorEl.textContent = error.message;
+            errorEl.style.display = 'block';
+        }
+    }
+
+    async logout() {
+        if (this.auth) {
+            await this.auth.signOut();
+            window.location.reload(); // Force refresh to clear memory entirely
+        }
+    }
+
+    loadData() {
+        const prefix = this.currentUser.uid + '_';
+        this.transactions = JSON.parse(localStorage.getItem(prefix + 'transactions')) || [];
+        this.budget = parseFloat(localStorage.getItem(prefix + 'monthlyBudget')) || 0;
 
         const defaultCategories = {
             Salary: { icon: 'banknote', color: '#00ff88' },
@@ -37,20 +207,16 @@ class SpendWise {
             Debt: { icon: 'landmark', color: '#94a3b8' },
             Other: { icon: 'help-circle', color: '#94a3b8' }
         };
-        this.categories = JSON.parse(localStorage.getItem('categories')) || defaultCategories;
+        this.categories = JSON.parse(localStorage.getItem(prefix + 'categories')) || defaultCategories;
 
-        this.settings = JSON.parse(localStorage.getItem('settings')) || {
-            username: 'Mr Hacker',
+        this.settings = JSON.parse(localStorage.getItem(prefix + 'settings')) || {
+            username: this.currentUser.email.split('@')[0],
             accent: '#00e5ff',
             theme: 'dark'
         };
 
-        this.editingId = null;
-        this.editingCategoryId = null;
-        this.auditLog = JSON.parse(localStorage.getItem('auditLog')) || [];
-        this.lastTransactionId = parseInt(localStorage.getItem('lastTransactionId')) || 0;
-
-        this.init();
+        this.auditLog = JSON.parse(localStorage.getItem(prefix + 'auditLog')) || [];
+        this.lastTransactionId = parseInt(localStorage.getItem(prefix + 'lastTransactionId')) || 0;
     }
 
     init() {
@@ -85,17 +251,10 @@ class SpendWise {
         // Generate a unique session ID to identify this specific browser tab
         this.clientId = Math.random().toString(36).substring(7);
         
-        if (!this.firebaseConfig.apiKey.startsWith('PASTE')) {
-            try {
-                firebase.initializeApp(this.firebaseConfig);
-                this.db = firebase.database();
-                this.isLive = true;
-                this.syncWithCloud();
-                console.log("🚀 Firebase Ironclad Sync Active | ID: " + this.clientId);
-            } catch (err) {
-                console.error("❌ Firebase Init Failed:", err);
-                this.showToast("Cloud Sync Failed. Running offline.", "error");
-            }
+        if (this.db) {
+            this.isLive = true;
+            this.syncWithCloud();
+            console.log("🚀 Firebase Ironclad Sync Active | ID: " + this.clientId);
         }
     }
 
@@ -158,16 +317,24 @@ class SpendWise {
     }
 
     saveToLocal(isSyncFromCloud = false) {
-        localStorage.setItem('transactions', JSON.stringify(this.transactions));
-        localStorage.setItem('monthlyBudget', this.budget);
-        localStorage.setItem('categories', JSON.stringify(this.categories));
-        localStorage.setItem('settings', JSON.stringify(this.settings));
-        localStorage.setItem('auditLog', JSON.stringify(this.auditLog));
-        localStorage.setItem('lastTransactionId', this.lastTransactionId);
+        if (!this.currentUser) return;
+        const prefix = this.currentUser.uid + '_';
+        
+        localStorage.setItem(prefix + 'transactions', JSON.stringify(this.transactions));
+        localStorage.setItem(prefix + 'monthlyBudget', this.budget);
+        localStorage.setItem(prefix + 'categories', JSON.stringify(this.categories));
+        localStorage.setItem(prefix + 'settings', JSON.stringify(this.settings));
+        localStorage.setItem(prefix + 'auditLog', JSON.stringify(this.auditLog));
+        localStorage.setItem(prefix + 'lastTransactionId', this.lastTransactionId);
         
         if (!isSyncFromCloud) {
-            localStorage.setItem('lastLocalUpdate', Date.now());
+            localStorage.setItem(prefix + 'lastLocalUpdate', Date.now());
         }
+    }
+
+    setLocal(key, value) {
+        if (!this.currentUser) return;
+        localStorage.setItem(this.currentUser.uid + '_' + key, value);
     }
 
     saveToCloud() {
@@ -415,7 +582,7 @@ class SpendWise {
                 this.confirmDialog('Are you sure you want to clear the entire audit log?', 'trash-2').then(ok => {
                     if (ok) {
                         this.auditLog = [];
-                        localStorage.setItem('auditLog', JSON.stringify(this.auditLog));
+                        this.setLocal('auditLog', JSON.stringify(this.auditLog));
                         this.renderAuditLog();
                         this.showToast('Audit log cleared.', 'info');
                     }
@@ -537,8 +704,8 @@ class SpendWise {
 
         // Dynamic Greeting
         const hour = new Date().getHours();
-        const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
-        document.getElementById('user-greeting').textContent = `${greeting}, Mr Hacker!`;
+        const timeGreeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+        document.getElementById('user-greeting').textContent = `${timeGreeting}, ${this.settings.username}!`;
         document.getElementById('current-date-display').textContent = new Date().toLocaleDateString('en-PK', { weekday: 'long', day: 'numeric', month: 'long' });
 
         // Calculations
@@ -1014,14 +1181,14 @@ class SpendWise {
             });
             this.logAction('EDIT', `Category: ${this.editingCategoryId}`, `Renamed to "${name}". All associated transactions updated.`);
             delete this.categories[this.editingCategoryId];
-            localStorage.setItem('transactions', JSON.stringify(this.transactions));
+            this.setLocal('transactions', JSON.stringify(this.transactions));
         } else if (!this.editingCategoryId && !this.categories[name]) {
             this.logAction('CREATE', `Category: ${name}`, `Created new category.`);
         }
 
         this.categories[name] = { icon, color };
 
-        localStorage.setItem('categories', JSON.stringify(this.categories));
+        this.setLocal('categories', JSON.stringify(this.categories));
         this.renderCategories();
         this.updateTransactionFormCategories();
         this.updateUI();
@@ -1032,7 +1199,7 @@ class SpendWise {
     handleSetBudget(e) {
         e.preventDefault();
         this.budget = parseFloat(document.getElementById('budget-amount').value);
-        localStorage.setItem('monthlyBudget', this.budget);
+        this.setLocal('monthlyBudget', this.budget);
         this.updateUI();
         this.toggleModal(this.budgetModal, false);
     }
@@ -1083,7 +1250,7 @@ class SpendWise {
         if (this.transactions.length === 0) {
             if (this.lastTransactionId === 0) {
                 this.lastTransactionId = 0;
-                localStorage.setItem('lastTransactionId', 0);
+                this.setLocal('lastTransactionId', 0);
             }
             return;
         }
@@ -1100,7 +1267,7 @@ class SpendWise {
             });
 
             this.lastTransactionId = this.transactions.length;
-            localStorage.setItem('lastTransactionId', this.lastTransactionId);
+            this.setLocal('lastTransactionId', this.lastTransactionId);
 
             // Re-sort descending for the UI
             this.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -1668,7 +1835,7 @@ class SpendWise {
         this.auditLog.unshift(logEntry);
         // Keep only last 100 entries
         if (this.auditLog.length > 100) this.auditLog.pop();
-        localStorage.setItem('auditLog', JSON.stringify(this.auditLog));
+        this.setLocal('auditLog', JSON.stringify(this.auditLog));
     }
 
     renderAuditLog() {
@@ -1774,7 +1941,7 @@ class SpendWise {
 
     setTheme(themeName) {
         this.settings.theme = themeName;
-        localStorage.setItem('settings', JSON.stringify(this.settings));
+        this.setLocal('settings', JSON.stringify(this.settings));
         this.applySettings();
     }
 
@@ -1786,7 +1953,9 @@ class SpendWise {
         const settingsName = document.getElementById('settings-username');
         const profileName = document.getElementById('profile-name');
 
-        if (greeting) greeting.textContent = `Good Morning, ${this.settings.username}!`;
+        const hour = new Date().getHours();
+        const timeGreeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+        if (greeting) greeting.textContent = `${timeGreeting}, ${this.settings.username}!`;
         if (userName) userName.textContent = this.settings.username;
         if (avatar) avatar.textContent = this.settings.username.split(' ').map(n => n[0]).join('').toUpperCase();
         if (settingsName) settingsName.value = this.settings.username;
@@ -1817,14 +1986,59 @@ class SpendWise {
         const newName = document.getElementById('settings-username').value;
         if (!newName) return;
         this.settings.username = newName;
-        localStorage.setItem('settings', JSON.stringify(this.settings));
+        this.setLocal('settings', JSON.stringify(this.settings));
         this.applySettings();
         this.showToast('Profile updated successfully!', 'success');
     }
 
+    async updatePassword() {
+        const oldPassword = document.getElementById('settings-old-password').value;
+        const newPassword = document.getElementById('settings-new-password').value;
+        const confirmPassword = document.getElementById('settings-confirm-password').value;
+        const errorEl = document.getElementById('security-error');
+        
+        if (!oldPassword) {
+            errorEl.textContent = 'Please enter your current password to verify your identity.';
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        if (!newPassword || newPassword.length < 6) {
+            errorEl.textContent = 'New password must be at least 6 characters long.';
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            errorEl.textContent = 'New passwords do not match. Please retype them carefully.';
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        try {
+            // Step 1: Securely re-authenticate to prove identity and fulfill Firebase's recent-login requirement
+            const credential = firebase.auth.EmailAuthProvider.credential(this.currentUser.email, oldPassword);
+            await this.currentUser.reauthenticateWithCredential(credential);
+
+            // Step 2: Push the new password to the cloud
+            await this.currentUser.updatePassword(newPassword);
+            
+            errorEl.style.display = 'none';
+            document.getElementById('settings-old-password').value = '';
+            document.getElementById('settings-new-password').value = '';
+            document.getElementById('settings-confirm-password').value = '';
+            
+            this.showToast('Password updated securely!', 'success');
+            this.logAction('EDIT', 'Account Security', 'Password was updated after successful re-authentication.');
+        } catch (error) {
+            errorEl.textContent = error.message;
+            errorEl.style.display = 'block';
+        }
+    }
+
     setAccent(color, el) {
         this.settings.accent = color;
-        localStorage.setItem('settings', JSON.stringify(this.settings));
+        this.setLocal('settings', JSON.stringify(this.settings));
         this.applySettings();
 
         // Update swatch active state

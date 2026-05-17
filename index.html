@@ -17,8 +17,61 @@
 </head>
 <body>
     <div class="app-container">
+        <!-- AUTHENTICATION PORTAL OVERLAY -->
+        <div id="auth-portal" class="auth-overlay">
+            <div class="auth-card glass">
+                <div class="auth-header">
+                    <div class="logo">
+                        <div class="logo-icon"><i data-lucide="wallet"></i></div>
+                        <h2>SpendWise</h2>
+                    </div>
+                    <p>Secure Multi-User Vault</p>
+                </div>
+                
+                <div class="auth-tabs">
+                    <button class="auth-tab active" id="tab-login" onclick="app.switchAuthMode('login')">Login</button>
+                    <button class="auth-tab" id="tab-register" onclick="app.switchAuthMode('register')">Create Account</button>
+                </div>
+
+                <div class="auth-body">
+                    <form id="auth-form" onsubmit="app.handleAuthSubmit(event)">
+                        <div class="input-group">
+                            <label>Email Address</label>
+                            <input type="email" id="auth-email" required placeholder="you@example.com" autocomplete="email">
+                        </div>
+                        <div class="input-group" style="position: relative;">
+                            <label>Password</label>
+                            <input type="password" id="auth-password" required minlength="6" placeholder="••••••••" autocomplete="current-password" style="padding-right: 45px;">
+                            <button type="button" class="password-toggle" onclick="app.togglePasswordVisibility()" style="position: absolute; right: 15px; top: 41px; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;">
+                                <i data-lucide="eye" id="password-eye-icon"></i>
+                            </button>
+                        </div>
+                        <div style="text-align: right; margin-top: -0.5rem; margin-bottom: 1rem;">
+                            <a href="#" onclick="app.forgotPassword(event)" id="forgot-password-link" style="color: var(--primary); font-size: 0.8rem; text-decoration: none; font-weight: 600;">Forgot Password?</a>
+                        </div>
+                        <div id="auth-error" class="auth-error" style="display: none; color: #ff4d6d; margin-top: 1rem; font-size: 0.85rem; text-align: center;"></div>
+                        <button type="submit" class="btn-primary" id="auth-submit-btn" style="width: 100%; justify-content: center; margin-top: 1.5rem;">Access Vault</button>
+                    </form>
+
+                    <div class="auth-divider">
+                        <span>OR</span>
+                    </div>
+
+                    <button class="btn-google" onclick="app.googleSignIn()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                        </svg>
+                        Continue with Google
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Sidebar Navigation -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="main-sidebar">
             <div class="logo-container">
                 <div class="logo-icon">
                     <i data-lucide="wallet"></i>
@@ -59,7 +112,16 @@
                     <span>Settings</span>
                 </a>
             </nav>
-            <div class="user-profile">
+            
+            <!-- Logout Button -->
+            <div class="logout-container" style="margin-top: auto; padding: 2rem;">
+                <button class="nav-item" style="width: 100%; border: none; background: rgba(255, 77, 109, 0.1); color: #ff4d6d; font-weight: 600; padding: 1rem; border-radius: 12px; display: flex; align-items: center; gap: 0.75rem; cursor: pointer; transition: all 0.3s;" onclick="app.logout()">
+                    <i data-lucide="log-out"></i>
+                    <span>Secure Logout</span>
+                </button>
+            </div>
+
+            <div class="user-profile" id="sidebar-user-profile">
                 <div class="avatar">MH</div>
                 <div class="user-info">
                     <p class="user-name">Mr Hacker</p>
@@ -403,6 +465,37 @@
                         <button class="btn-primary" onclick="app.updateProfile()">Update Profile</button>
                     </div>
 
+                    <!-- Security Center Card -->
+                    <div class="glass settings-card">
+                        <div class="card-header">
+                            <i data-lucide="shield"></i>
+                            <h3>Security Center</h3>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 1rem; position: relative;">
+                            <label>Current Password</label>
+                            <input type="password" id="settings-old-password" placeholder="Verify current password" autocomplete="current-password" style="padding-right: 45px;">
+                            <button type="button" class="password-toggle" onclick="app.toggleGenericPassword('settings-old-password', 'eye-old-password')" style="position: absolute; right: 15px; top: 38px; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;">
+                                <i data-lucide="eye" id="eye-old-password"></i>
+                            </button>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 1rem; position: relative;">
+                            <label>New Password</label>
+                            <input type="password" id="settings-new-password" placeholder="Enter new password (min 6 chars)" autocomplete="new-password" style="padding-right: 45px;">
+                            <button type="button" class="password-toggle" onclick="app.toggleGenericPassword('settings-new-password', 'eye-new-password')" style="position: absolute; right: 15px; top: 38px; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;">
+                                <i data-lucide="eye" id="eye-new-password"></i>
+                            </button>
+                        </div>
+                        <div class="form-group" style="position: relative;">
+                            <label>Confirm New Password</label>
+                            <input type="password" id="settings-confirm-password" placeholder="Retype new password" autocomplete="new-password" style="padding-right: 45px;">
+                            <button type="button" class="password-toggle" onclick="app.toggleGenericPassword('settings-confirm-password', 'eye-confirm-password')" style="position: absolute; right: 15px; top: 38px; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;">
+                                <i data-lucide="eye" id="eye-confirm-password"></i>
+                            </button>
+                        </div>
+                        <div id="security-error" class="auth-error" style="display: none; color: #ff4d6d; margin-bottom: 1rem; font-size: 0.85rem;"></div>
+                        <button class="btn-primary" onclick="app.updatePassword()" style="background: linear-gradient(135deg, var(--secondary), #ff0055); width: 100%; justify-content: center;">Update Password</button>
+                    </div>
+
                     <!-- Appearance Card -->
                     <div class="glass settings-card">
                         <div class="card-header">
@@ -618,6 +711,7 @@
 
     <!-- Firebase Integration -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
