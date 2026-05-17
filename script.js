@@ -4351,7 +4351,12 @@ class SpendWise {
                             <h4 style="font-size: 1rem; font-weight: 700; color: var(--text-main);">${split.title}</h4>
                             <span style="font-size: 0.75rem; color: var(--text-muted);">Category: ${split.category}</span>
                         </div>
-                        <span class="split-status-pill ${split.status.toLowerCase()}">${split.status}</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="split-status-pill ${split.status.toLowerCase()}">${split.status}</span>
+                            <button onclick="window.app.deleteSplitBill('${split.id}')" style="background: none; border: none; color: #ff4d6d; cursor: pointer; opacity: 0.7; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'" title="Delete Split Bill">
+                                <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                            </button>
+                        </div>
                     </div>
                     <div style="display: flex; justify-content: space-between; font-size: 0.85rem; border-top: 1px solid var(--glass-border); padding-top: 8px; margin-top: 4px;">
                         <span style="color: var(--text-muted);">Total Cost:</span>
@@ -4435,6 +4440,23 @@ class SpendWise {
         this.saveToCloud();
         this.updateUI();
         this.renderSharedWallets();
+    }
+
+    deleteSplitBill(id) {
+        const splitIndex = this.sharedWallets.findIndex(s => s.id === id);
+        if (splitIndex === -1) return;
+
+        this.confirmDialog(`Are you sure you want to delete the split bill "${this.sharedWallets[splitIndex].title}"?`, 'trash-2').then(ok => {
+            if (ok) {
+                this.sharedWallets.splice(splitIndex, 1);
+                this.logSharedActivity('user', `Deleted a split bill.`);
+                this.showToast(`Split bill deleted!`, 'success');
+                
+                this.saveToLocal();
+                this.saveToCloud();
+                this.renderSharedWallets();
+            }
+        });
     }
 
     settleSplitBill(id) {
