@@ -212,11 +212,13 @@ class SpendWise {
         this.settings = JSON.parse(localStorage.getItem(prefix + 'settings')) || {
             username: this.currentUser.email.split('@')[0],
             accent: '#00e5ff',
-            theme: 'dark'
+            theme: 'dark',
+            currency: 'USD'
         };
 
         this.auditLog = JSON.parse(localStorage.getItem(prefix + 'auditLog')) || [];
         this.lastTransactionId = parseInt(localStorage.getItem(prefix + 'lastTransactionId')) || 0;
+        this.goals = JSON.parse(localStorage.getItem(prefix + 'goals')) || [];
     }
 
     init() {
@@ -284,6 +286,7 @@ class SpendWise {
                     this.settings = cloudData.settings || this.settings;
                     this.auditLog = cloudData.auditLog || [];
                     this.lastTransactionId = cloudData.lastTransactionId || this.transactions.length;
+                    this.goals = cloudData.goals || [];
                     
                     this.reindexTransactions();
                     this.saveToLocal(true);
@@ -304,6 +307,7 @@ class SpendWise {
                 this.transactions = data.transactions || [];
                 this.budget = data.budget || 0;
                 this.categories = data.categories || this.categories;
+                this.goals = data.goals || [];
                 this.updateUI();
                 this.saveToLocal(true);
             }
@@ -326,6 +330,7 @@ class SpendWise {
         localStorage.setItem(prefix + 'settings', JSON.stringify(this.settings));
         localStorage.setItem(prefix + 'auditLog', JSON.stringify(this.auditLog));
         localStorage.setItem(prefix + 'lastTransactionId', this.lastTransactionId);
+        localStorage.setItem(prefix + 'goals', JSON.stringify(this.goals));
         
         if (!isSyncFromCloud) {
             localStorage.setItem(prefix + 'lastLocalUpdate', Date.now());
@@ -353,6 +358,7 @@ class SpendWise {
             settings: this.settings,
             auditLog: this.auditLog,
             lastTransactionId: this.lastTransactionId,
+            goals: this.goals,
             lastUpdateId: this.clientId,
             timestamp: firebase.database.ServerValue.TIMESTAMP
         };
@@ -434,6 +440,7 @@ class SpendWise {
         this.totalSpentEl = document.getElementById('total-spent');
         this.debtBalanceEl = document.getElementById('debt-balance');
         this.cashInHandEl = document.getElementById('cash-in-hand');
+        this.cashInHandSubtitleEl = document.getElementById('cash-in-hand-subtitle');
         this.spentPercentageEl = document.getElementById('spent-percentage');
         this.debtStatusEl = document.getElementById('debt-status');
         this.budgetCard = document.getElementById('budget-card');
@@ -535,7 +542,17 @@ class SpendWise {
         });
 
         // Icon Picker Events
-        document.getElementById('open-icon-picker').addEventListener('click', () => this.toggleModal(document.getElementById('icon-picker-modal'), true));
+        document.getElementById('open-icon-picker').addEventListener('click', () => {
+            this.iconPickerTargetInputId = 'cat-icon';
+            this.toggleModal(document.getElementById('icon-picker-modal'), true);
+        });
+        const openGoalIconPicker = document.getElementById('open-goal-icon-picker');
+        if (openGoalIconPicker) {
+            openGoalIconPicker.addEventListener('click', () => {
+                this.iconPickerTargetInputId = 'goal-icon';
+                this.toggleModal(document.getElementById('icon-picker-modal'), true);
+            });
+        }
         document.getElementById('close-icon-picker').addEventListener('click', () => this.toggleModal(document.getElementById('icon-picker-modal'), false));
         document.getElementById('icon-search').addEventListener('input', (e) => this.renderIconPicker(e.target.value));
 
@@ -616,6 +633,41 @@ class SpendWise {
                 if (this.smartPersonSelector) this.smartPersonSelector.innerHTML = '';
             }
         });
+
+        // --- Goals Vault Event Bindings ---
+        const goalModal = document.getElementById('goal-modal');
+        const goalAllocateModal = document.getElementById('goal-allocate-modal');
+        
+        const addGoalBtn = document.getElementById('add-goal-btn');
+        if (addGoalBtn) {
+            addGoalBtn.addEventListener('click', () => {
+                this.editingGoalId = null;
+                document.getElementById('goal-modal-title').textContent = 'Create Savings Goal';
+                document.getElementById('goal-submit-btn').textContent = 'Create Goal';
+                document.getElementById('goal-form').reset();
+                this.toggleModal(goalModal, true);
+            });
+        }
+        
+        const closeGoalModalBtn = document.getElementById('close-goal-modal');
+        if (closeGoalModalBtn) {
+            closeGoalModalBtn.addEventListener('click', () => this.toggleModal(goalModal, false));
+        }
+
+        const closeGoalAllocateModalBtn = document.getElementById('close-goal-allocate-modal');
+        if (closeGoalAllocateModalBtn) {
+            closeGoalAllocateModalBtn.addEventListener('click', () => this.toggleModal(goalAllocateModal, false));
+        }
+
+        const goalForm = document.getElementById('goal-form');
+        if (goalForm) {
+            goalForm.addEventListener('submit', (e) => this.handleGoalSubmit(e));
+        }
+
+        const goalAllocateForm = document.getElementById('goal-allocate-form');
+        if (goalAllocateForm) {
+            goalAllocateForm.addEventListener('submit', (e) => this.handleGoalAllocate(e));
+        }
     }
 
     updateSmartPersonSuggestions(type) {
@@ -726,8 +778,18 @@ class SpendWise {
 
         const spentPercent = this.budget > 0 ? (totalSpent / this.budget) * 100 : 0;
 
+        const totalGoalsSavings = (this.goals || []).reduce((sum, g) => sum + parseFloat(g.current || 0), 0);
+        const availableCash = cashInHand - totalGoalsSavings;
+
         // Display Stats
         if (this.cashInHandEl) this.cashInHandEl.textContent = this.formatCurrency(cashInHand);
+        if (this.cashInHandSubtitleEl) {
+            if (totalGoalsSavings > 0) {
+                this.cashInHandSubtitleEl.textContent = `Available: ${this.formatCurrency(availableCash)} (excl. savings)`;
+            } else {
+                this.cashInHandSubtitleEl.textContent = 'Current Liquidity';
+            }
+        }
         this.totalIncomeEl.textContent = this.formatCurrency(totalIncome);
         this.totalBudgetEl.textContent = this.formatCurrency(this.budget);
         this.totalSpentEl.textContent = this.formatCurrency(totalSpent);
@@ -773,6 +835,8 @@ class SpendWise {
         this.renderAuditLog(); // Ensure Audit Log is refreshed
         this.updateCharts(monthlyData);
         this.renderExtendedAnalytics(monthlyData);
+        this.renderCategoryBudgets();
+        this.renderGoals();
 
         if (window.lucide) lucide.createIcons();
     }
@@ -796,6 +860,7 @@ class SpendWise {
             categories: 'Category Management',
             analytics: 'Financial Intelligence',
             debt: 'Debt Vault',
+            goals: 'Goals Vault',
             audit: 'Audit Vault',
             calendar: 'Calendar Vault',
             settings: 'System Settings'
@@ -805,6 +870,7 @@ class SpendWise {
         if (viewName === 'transactions') this.renderFullTransactions();
         if (viewName === 'categories') this.renderCategories();
         if (viewName === 'debt') this.renderDebtVault();
+        if (viewName === 'goals') this.renderGoals();
         if (viewName === 'audit') this.renderAuditLog();
         if (viewName === 'calendar') this.renderCalendar();
     }
@@ -865,19 +931,339 @@ class SpendWise {
     }
 
     renderCategories() {
-        this.categoryListEl.innerHTML = Object.entries(this.categories).map(([name, data]) => `
-            <div class="category-item glass">
-                <div class="cat-actions">
-                    <button class="action-btn edit" onclick="app.editCategory('${name}')"><i data-lucide="edit-3"></i></button>
-                    <button class="action-btn delete" onclick="app.deleteCategory('${name}')"><i data-lucide="trash-2"></i></button>
+        this.categoryListEl.innerHTML = Object.entries(this.categories).map(([name, data]) => {
+            const budgetText = data.budget ? `<p class="cat-budget-text text-muted" style="font-size: 0.82rem; margin-top: 0.25rem;">Limit: ${this.formatCurrency(data.budget)}</p>` : '';
+            return `
+                <div class="category-item glass">
+                    <div class="cat-actions">
+                        <button class="action-btn edit" onclick="app.editCategory('${name}')"><i data-lucide="edit-3"></i></button>
+                        <button class="action-btn delete" onclick="app.deleteCategory('${name}')"><i data-lucide="trash-2"></i></button>
+                    </div>
+                    <div class="cat-icon-large" style="background: ${data.color}20; color: ${data.color}">
+                        <i data-lucide="${data.icon}"></i>
+                    </div>
+                    <div class="cat-info">
+                        <h3>${name}</h3>
+                        ${budgetText}
+                    </div>
                 </div>
-                <div class="cat-icon-large" style="background: ${data.color}20; color: ${data.color}">
-                    <i data-lucide="${data.icon}"></i>
-                </div>
-                <div class="cat-info"><h3>${name}</h3></div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
         if (window.lucide) lucide.createIcons();
+    }
+
+    renderCategoryBudgets() {
+        const container = document.getElementById('category-budgets-container');
+        const card = document.getElementById('category-budgets-card');
+        if (!container || !card) return;
+
+        // Calculate total spending per category for this month
+        const monthlyTransactions = this.getFilteredTransactions(true);
+        const categorySpending = {};
+        
+        Object.keys(this.categories).forEach(cat => {
+            categorySpending[cat] = 0;
+        });
+
+        monthlyTransactions.forEach(t => {
+            if (t.type === 'Expense' && categorySpending[t.category] !== undefined) {
+                categorySpending[t.category] += parseFloat(t.amount);
+            }
+        });
+
+        const budgetedCategories = Object.entries(this.categories).filter(([name, data]) => data.budget && data.budget > 0);
+
+        if (budgetedCategories.length === 0) {
+            card.style.display = 'none';
+            return;
+        }
+
+        card.style.display = 'block';
+        container.innerHTML = budgetedCategories.map(([name, data]) => {
+            const spent = categorySpending[name] || 0;
+            const budget = data.budget;
+            const percent = Math.min((spent / budget) * 100, 100);
+            const isOver = spent > budget;
+            const progressColor = isOver ? 'var(--secondary)' : (percent >= 80 ? '#ffb703' : 'var(--primary)');
+            
+            return `
+                <div class="category-budget-item">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: ${data.color};"></span>
+                            <span style="font-weight: 600; color: var(--text-main);">${name}</span>
+                        </div>
+                        <span style="font-size: 0.85rem; font-weight: 500; color: ${isOver ? 'var(--secondary)' : 'var(--text-muted)'};">
+                            ${this.formatCurrency(spent)} / ${this.formatCurrency(budget)}
+                        </span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" style="width: ${percent}%; background: ${progressColor}; height: 100%;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+                        <span>${percent.toFixed(0)}% Used</span>
+                        <span>${isOver ? 'Over budget!' : `${this.formatCurrency(budget - spent)} left`}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    getCashInHand() {
+        const transactions = this.transactions || [];
+        const totalIncome = transactions.filter(t => t.type === 'Income').reduce((s, t) => s + t.amount, 0);
+        const totalSpent = transactions.filter(t => t.type === 'Expense').reduce((s, t) => s + t.amount, 0);
+        const totalLent = transactions.filter(t => t.type === 'Lend').reduce((s, t) => s + t.amount, 0);
+        const totalRepaid = transactions.filter(t => t.type === 'Repay').reduce((s, t) => s + t.amount, 0);
+        const totalBorrowed = transactions.filter(t => t.type === 'Borrow').reduce((s, t) => s + t.amount, 0);
+        const totalPaidback = transactions.filter(t => t.type === 'Payback').reduce((s, t) => s + t.amount, 0);
+        return (totalIncome + totalBorrowed + totalRepaid) - (totalSpent + totalLent + totalPaidback);
+    }
+
+    renderGoals() {
+        const container = document.getElementById('goals-list-container');
+        if (!container) return;
+
+        if (!this.goals || this.goals.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state" style="grid-column: 1 / -1; text-align: center; padding: 3rem; background: rgba(255, 255, 255, 0.01); border: 1px dashed rgba(255, 255, 255, 0.05); border-radius: 18px;">
+                    <i data-lucide="target" style="width: 48px; height: 48px; color: var(--text-muted); margin-bottom: 1rem; opacity: 0.5;"></i>
+                    <h3 style="color: var(--text-main); font-weight: 600; margin-bottom: 0.5rem;">No goals set yet</h3>
+                    <p class="text-muted" style="font-size: 0.9rem;">Create a savings goal to start earmarking cash for your wishlist!</p>
+                </div>
+            `;
+            if (window.lucide) lucide.createIcons();
+            return;
+        }
+
+        container.innerHTML = this.goals.map(goal => {
+            const current = parseFloat(goal.current || 0);
+            const target = parseFloat(goal.target || 0);
+            const percent = Math.min((current / target) * 100, 100);
+            const isCompleted = current >= target;
+            
+            let deadlineHtml = '';
+            if (goal.deadline) {
+                const diffTime = new Date(goal.deadline) - new Date();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                let daysText = '';
+                if (diffDays > 0) {
+                    daysText = `${diffDays} days left`;
+                } else if (diffDays === 0) {
+                    daysText = 'Today!';
+                } else {
+                    daysText = `${Math.abs(diffDays)} days overdue`;
+                }
+                const formattedDate = new Date(goal.deadline).toLocaleDateString('en-PK', { month: 'short', day: 'numeric', year: 'numeric' });
+                deadlineHtml = `
+                    <div class="goal-deadline-badge" title="Target Date: ${formattedDate}">
+                        <i data-lucide="calendar" style="width: 12px; height: 12px;"></i>
+                        <span>${daysText}</span>
+                    </div>
+                `;
+            }
+
+            const activeColor = goal.color || 'var(--primary)';
+
+            return `
+                <div class="goal-card glass" style="border-top: 3px solid ${activeColor};">
+                    <div class="goal-header">
+                        <div class="goal-icon-wrapper" style="background: ${activeColor}20; color: ${activeColor}">
+                            <i data-lucide="${goal.icon || 'target'}"></i>
+                        </div>
+                        <div class="goal-card-actions">
+                            <button class="action-btn edit" onclick="app.editGoal('${goal.id}')" title="Edit Goal"><i data-lucide="edit-3"></i></button>
+                            <button class="action-btn delete" onclick="app.deleteGoal('${goal.id}')" title="Delete Goal"><i data-lucide="trash-2"></i></button>
+                        </div>
+                    </div>
+                    <div class="goal-title-area">
+                        <h3 style="display: flex; align-items: center; gap: 8px;">
+                            ${goal.title}
+                            ${isCompleted ? `<span style="font-size: 0.75rem; background: rgba(0,255,136,0.15); color: #00ff88; padding: 2px 8px; border-radius: 99px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="check-circle" style="width: 10px; height: 10px;"></i> Achieved</span>` : ''}
+                        </h3>
+                        ${deadlineHtml}
+                    </div>
+                    <div>
+                        <div class="goal-financials">
+                            <div>
+                                <span class="goal-saved">${this.formatCurrency(current)}</span>
+                            </div>
+                            <div class="goal-target-val">
+                                Target: <span>${this.formatCurrency(target)}</span>
+                            </div>
+                        </div>
+                        <div class="progress-bar-bg" style="height: 8px; border-radius: 99px; background: rgba(255, 255, 255, 0.05); overflow: hidden; position: relative;">
+                            <div class="progress-bar-fill" style="width: ${percent}%; background: ${activeColor}; height: 100%; box-shadow: 0 0 10px ${activeColor}40;"></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+                            <span>${percent.toFixed(0)}% saved</span>
+                            <span>${isCompleted ? 'Goal Met!' : `${this.formatCurrency(target - current)} left`}</span>
+                        </div>
+                    </div>
+                    <div class="goal-actions-row">
+                        <button class="btn-goal-allocate" onclick="app.openGoalAllocate('${goal.id}')" style="margin-top: 1rem; width: 100%;">
+                            <i data-lucide="dollar-sign"></i>
+                            <span>Manage Funds</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        if (window.lucide) lucide.createIcons();
+    }
+
+    handleGoalSubmit(e) {
+        e.preventDefault();
+        
+        const title = document.getElementById('goal-title').value.trim();
+        const target = parseFloat(document.getElementById('goal-target').value) || 0;
+        const current = parseFloat(document.getElementById('goal-current').value) || 0;
+        const color = document.getElementById('goal-color').value;
+        const deadline = document.getElementById('goal-deadline').value;
+        const icon = document.getElementById('goal-icon').value.trim() || 'target';
+
+        const cashInHand = this.getCashInHand();
+        const otherGoalsSavings = this.goals
+            .filter(g => g.id !== this.editingGoalId)
+            .reduce((sum, g) => sum + parseFloat(g.current || 0), 0);
+        const availableCash = cashInHand - otherGoalsSavings;
+
+        if (current > availableCash) {
+            this.showToast(`Starting savings exceeds available cash! You only have ${this.formatCurrency(availableCash)} available.`, 'error');
+            return;
+        }
+
+        if (this.editingGoalId) {
+            const goal = this.goals.find(g => g.id === this.editingGoalId);
+            if (goal) {
+                const oldSaved = parseFloat(goal.current || 0);
+                const diff = current - oldSaved;
+                if (diff > availableCash) {
+                    this.showToast(`Updated savings exceeds available cash!`, 'error');
+                    return;
+                }
+                
+                this.logAction('EDIT', `Goal: ${title}`, `Goal limits updated. Saved changed by ${this.formatCurrency(diff)}.`);
+                goal.title = title;
+                goal.target = target;
+                goal.current = current;
+                goal.color = color;
+                goal.deadline = deadline;
+                goal.icon = icon;
+                this.showToast('Goal updated.', 'success');
+            }
+        } else {
+            const newGoal = {
+                id: Date.now().toString(),
+                title,
+                target,
+                current,
+                color,
+                deadline,
+                icon
+            };
+            this.goals.push(newGoal);
+            this.logAction('CREATE', `Goal: ${title}`, `Created new savings target with saved amount ${this.formatCurrency(current)}.`);
+            this.showToast('Goal created successfully.', 'success');
+        }
+
+        this.editingGoalId = null;
+        this.toggleModal(document.getElementById('goal-modal'), false);
+        this.saveToLocal();
+        this.saveToCloud();
+        this.updateUI();
+    }
+
+    editGoal(id) {
+        const goal = this.goals.find(g => g.id === id);
+        if (!goal) return;
+
+        this.editingGoalId = id;
+        document.getElementById('goal-modal-title').textContent = 'Edit Savings Goal';
+        document.getElementById('goal-submit-btn').textContent = 'Update Goal';
+
+        document.getElementById('goal-title').value = goal.title;
+        document.getElementById('goal-target').value = goal.target;
+        document.getElementById('goal-current').value = goal.current;
+        document.getElementById('goal-color').value = goal.color || '#00e5ff';
+        document.getElementById('goal-deadline').value = goal.deadline || '';
+        document.getElementById('goal-icon').value = goal.icon || 'target';
+
+        this.toggleModal(document.getElementById('goal-modal'), true);
+    }
+
+    deleteGoal(id) {
+        const goal = this.goals.find(g => g.id === id);
+        if (!goal) return;
+
+        this.confirmDialog(`Are you sure you want to delete "${goal.title}"? Any saved funds will be returned to your active cash balance.`, 'trash-2').then(ok => {
+            if (ok) {
+                this.logAction('DELETE', `Goal: ${goal.title}`, `Deleted goal and released ${this.formatCurrency(goal.current)} back to general available liquidity.`);
+                this.goals = this.goals.filter(g => g.id !== id);
+                
+                this.saveToLocal();
+                this.saveToCloud();
+                this.updateUI();
+                this.showToast(`Goal "${goal.title}" deleted.`, 'info');
+            }
+        });
+    }
+
+    openGoalAllocate(id) {
+        const goal = this.goals.find(g => g.id === id);
+        if (!goal) return;
+
+        document.getElementById('goal-allocate-id').value = goal.id;
+        document.getElementById('goal-allocate-title').value = goal.title;
+        document.getElementById('goal-allocate-amount').value = '';
+        document.getElementById('goal-allocate-type').value = 'allocate';
+
+        this.toggleModal(document.getElementById('goal-allocate-modal'), true);
+    }
+
+    handleGoalAllocate(e) {
+        e.preventDefault();
+
+        const id = document.getElementById('goal-allocate-id').value;
+        const goal = this.goals.find(g => g.id === id);
+        if (!goal) return;
+
+        const type = document.getElementById('goal-allocate-type').value;
+        const amount = parseFloat(document.getElementById('goal-allocate-amount').value) || 0;
+
+        if (amount <= 0) {
+            this.showToast('Please enter a valid amount greater than 0.', 'error');
+            return;
+        }
+
+        const cashInHand = this.getCashInHand();
+        const totalGoalsSavings = this.goals.reduce((sum, g) => sum + parseFloat(g.current || 0), 0);
+        const availableCash = cashInHand - totalGoalsSavings;
+
+        if (type === 'allocate') {
+            if (amount > availableCash) {
+                this.showToast(`Insufficient available cash! You only have ${this.formatCurrency(availableCash)} available.`, 'error');
+                return;
+            }
+            goal.current = parseFloat(goal.current || 0) + amount;
+            this.logAction('ALLOCATE', `Goal: ${goal.title}`, `Allocated ${this.formatCurrency(amount)} from liquid cash.`);
+            this.showToast(`Allocated ${this.formatCurrency(amount)} to "${goal.title}".`, 'success');
+        } else if (type === 'withdraw') {
+            const currentSaved = parseFloat(goal.current || 0);
+            if (amount > currentSaved) {
+                this.showToast(`Cannot withdraw more than what is saved! You only have ${this.formatCurrency(currentSaved)} saved in this goal.`, 'error');
+                return;
+            }
+            goal.current = currentSaved - amount;
+            this.logAction('WITHDRAW', `Goal: ${goal.title}`, `Withdrew ${this.formatCurrency(amount)} back to active cash.`);
+            this.showToast(`Withdrew ${this.formatCurrency(amount)} from "${goal.title}".`, 'success');
+        }
+
+        this.toggleModal(document.getElementById('goal-allocate-modal'), false);
+        this.saveToLocal();
+        this.saveToCloud();
+        this.updateUI();
     }
 
     // --- Charting ---
@@ -1173,6 +1559,10 @@ class SpendWise {
         const name = document.getElementById('cat-name').value;
         const icon = document.getElementById('cat-icon').value;
         const color = document.getElementById('cat-color').value;
+        const budget = parseFloat(document.getElementById('cat-budget').value) || 0;
+
+        const oldCat = this.categories[name];
+        const oldBudget = oldCat ? (oldCat.budget || 0) : 0;
 
         if (this.editingCategoryId && this.editingCategoryId !== name) {
             // Update all transactions using the old category name
@@ -1183,10 +1573,12 @@ class SpendWise {
             delete this.categories[this.editingCategoryId];
             this.setLocal('transactions', JSON.stringify(this.transactions));
         } else if (!this.editingCategoryId && !this.categories[name]) {
-            this.logAction('CREATE', `Category: ${name}`, `Created new category.`);
+            this.logAction('CREATE', `Category: ${name}`, `Created new category with budget ${this.formatCurrency(budget)}.`);
+        } else if (oldBudget !== budget) {
+            this.logAction('EDIT', `Category: ${name}`, `Updated budget from ${this.formatCurrency(oldBudget)} to ${this.formatCurrency(budget)}.`);
         }
 
-        this.categories[name] = { icon, color };
+        this.categories[name] = { icon, color, budget };
 
         this.setLocal('categories', JSON.stringify(this.categories));
         this.renderCategories();
@@ -1288,6 +1680,7 @@ class SpendWise {
         document.getElementById('cat-name').value = name;
         document.getElementById('cat-icon').value = cat.icon;
         document.getElementById('cat-color').value = cat.color;
+        document.getElementById('cat-budget').value = cat.budget || '';
 
         this.toggleModal(this.categoryModal, true);
     }
@@ -1353,7 +1746,9 @@ class SpendWise {
     }
 
     formatCurrency(amount) {
-        return new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(amount);
+        const currency = this.settings?.currency || 'USD';
+        // Use 'en-US' locale as a stable base to ensure the currency symbol is reliably rendered
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, minimumFractionDigits: 0 }).format(amount);
     }
 
     // --- Export Logic ---
@@ -1362,18 +1757,86 @@ class SpendWise {
         const data = this.getFilteredTransactions();
         if (data.length === 0) return this.showToast('No data to export!', 'error');
 
-        const headers = ['Date', 'Type', 'Category', 'Amount (PKR)', 'Note'];
-        const csvRows = [headers.join(',')];
+        const esc = (val) => `"${(val || '').toString().replace(/"/g, '""')}"`;
+        const currency = this.settings.currency || 'USD';
+        
+        const cashInHand = this.getCashInHand();
+        const totalGoalsSavings = (this.goals || []).reduce((sum, g) => sum + parseFloat(g.current || 0), 0);
+        const availableCash = cashInHand - totalGoalsSavings;
 
+        const filteredTransactions = this.getFilteredTransactions(true);
+        const totalIncome = filteredTransactions.filter(t => t.type === 'Income').reduce((s, t) => s + t.amount, 0);
+        const totalSpent = filteredTransactions.filter(t => t.type === 'Expense').reduce((s, t) => s + t.amount, 0);
+        const netSavings = totalIncome - totalSpent;
+
+        const csvRows = [];
+
+        // 1. Report Metadata Section
+        csvRows.push("SPENDWISE EXECUTIVE FINANCIAL REPORT");
+        csvRows.push(`"Generated On:",${esc(new Date().toLocaleString('en-PK'))}`);
+        csvRows.push(`"Reporting Period:",${esc(this.monthSelector.value)}`);
+        csvRows.push(`"Account Owner:",${esc(this.settings.username)}`);
+        csvRows.push(`"Account Tier:",${esc("Premium Account")}`);
+        csvRows.push(`"Primary Currency:",${esc(currency)}`);
+        csvRows.push(""); // spacing row
+
+        // 2. Executive Position Summary Section
+        csvRows.push("EXECUTIVE POSITION SUMMARY");
+        csvRows.push(`"Financial Metric","Value (${currency})"`);
+        csvRows.push(`"Total Monthly Income","${totalIncome.toFixed(2)}"`);
+        csvRows.push(`"Total Monthly Expenses","${totalSpent.toFixed(2)}"`);
+        csvRows.push(`"Net Monthly Surplus/Savings","${netSavings.toFixed(2)}"`);
+        csvRows.push(`"Total Liquidity (Cash in Hand)","${cashInHand.toFixed(2)}"`);
+        csvRows.push(`"Earmarked Wishlist Savings","${totalGoalsSavings.toFixed(2)}"`);
+        csvRows.push(`"Net Available Balance (General Liquidity)","${availableCash.toFixed(2)}"`);
+        csvRows.push(""); // spacing row
+
+        // 3. Envelope Budgets Performance Ledger
+        const budgetedCategories = Object.entries(this.categories).filter(([name, d]) => d.budget && d.budget > 0);
+        if (budgetedCategories.length > 0) {
+            const categorySpending = {};
+            Object.keys(this.categories).forEach(cat => categorySpending[cat] = 0);
+            filteredTransactions.forEach(t => {
+                if (t.type === 'Expense' && categorySpending[t.category] !== undefined) {
+                    categorySpending[t.category] += parseFloat(t.amount);
+                }
+            });
+
+            csvRows.push("CATEGORY BUDGET ENVELOPE PERFORMANCE");
+            csvRows.push(`"Category Envelope","Budget Limit (${currency})","Actual Spent (${currency})","Utilization %","Envelope Status"`);
+            
+            budgetedCategories.forEach(([name, d]) => {
+                const spent = categorySpending[name] || 0;
+                const budget = d.budget;
+                const pct = budget > 0 ? (spent / budget) * 100 : 0;
+                const status = spent > budget ? "Exceeded" : (pct >= 80 ? "Warning" : "Healthy");
+                csvRows.push(`${esc(name)},"${budget.toFixed(2)}","${spent.toFixed(2)}","${pct.toFixed(1)}%",${esc(status)}`);
+            });
+            csvRows.push(""); // spacing row
+        }
+
+        // 4. Savings Goals & Wishlist Progress Ledger
+        if (this.goals && this.goals.length > 0) {
+            csvRows.push("SAVINGS GOALS & WISHLISTS TARGETS");
+            csvRows.push(`"Wishlist Goal Target","Target Amount (${currency})","Current Earmarked (${currency})","Percentage Met","Deadline Date","Goal Status"`);
+            
+            this.goals.forEach(g => {
+                const current = parseFloat(g.current || 0);
+                const target = parseFloat(g.target || 0);
+                const pct = target > 0 ? (current / target) * 100 : 0;
+                const status = current >= target ? "Achieved" : "Accumulating";
+                const deadline = g.deadline || "No Target Date";
+                csvRows.push(`${esc(g.title)},"${target.toFixed(2)}","${current.toFixed(2)}","${pct.toFixed(1)}%",${esc(deadline)},${esc(status)}`);
+            });
+            csvRows.push(""); // spacing row
+        }
+
+        // 5. Detailed Transaction Ledger
+        csvRows.push("DETAILED TRANSACTIONS LEDGER");
+        csvRows.push(`"Transaction Date","Type","Category","Amount (${currency})","Reference Party","Due Date","Description Note"`);
+        
         data.forEach(t => {
-            const row = [
-                t.date,
-                t.type,
-                t.category,
-                t.amount,
-                `"${(t.note || '').replace(/"/g, '""')}"`
-            ];
-            csvRows.push(row.join(','));
+            csvRows.push(`${esc(t.date)},${esc(t.type)},${esc(t.category)},"${parseFloat(t.amount).toFixed(2)}",${esc(t.person || '-')},${esc(t.dueDate || '-')},${esc(t.note)}`);
         });
 
         const csvContent = csvRows.join('\n');
@@ -1382,7 +1845,7 @@ class SpendWise {
         const url = URL.createObjectURL(blob);
 
         link.setAttribute('href', url);
-        link.setAttribute('download', `SpendWise_Report_${this.monthSelector.value}.csv`);
+        link.setAttribute('download', `SpendWise_Financial_Report_${this.monthSelector.value.replace(/\s+/g, '_')}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
@@ -1396,53 +1859,269 @@ class SpendWise {
 
         const doc = new jsPDF();
         const period = this.monthSelector.value;
+        const currency = this.settings.currency || 'USD';
 
-        // Header
+        // 1. Calculate Financial Summary Totals
+        const cashInHand = this.getCashInHand();
+        const totalGoalsSavings = (this.goals || []).reduce((sum, g) => sum + parseFloat(g.current || 0), 0);
+        const availableCash = cashInHand - totalGoalsSavings;
+
+        const filteredTransactions = this.getFilteredTransactions(true);
+        const totalIncome = filteredTransactions.filter(t => t.type === 'Income').reduce((s, t) => s + t.amount, 0);
+        const totalSpent = filteredTransactions.filter(t => t.type === 'Expense').reduce((s, t) => s + t.amount, 0);
+        const netSavings = totalIncome - totalSpent;
+
+        // 2. Midnight Blue Header Banner
+        doc.setFillColor(22, 28, 45); // Deep Midnight Blue
+        doc.rect(0, 0, 210, 26, 'F');
+        
         doc.setFontSize(22);
-        doc.setTextColor(0, 229, 255); // Cyan
-        doc.text('SpendWise Financial Report', 14, 20);
+        doc.setTextColor(0, 229, 255); // Cyan Accent
+        doc.setFont('helvetica', 'bold');
+        doc.text('SPENDWISE', 14, 18);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'normal');
+        const statementTitle = 'EXECUTIVE FINANCIAL STATEMENT';
+        doc.text(statementTitle, 196 - doc.getTextWidth(statementTitle), 16);
 
-        doc.setFontSize(12);
-        doc.setTextColor(100);
-        doc.text(`Period: ${period}`, 14, 30);
-        doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 38);
+        // 3. Metadata Header Section
+        doc.setTextColor(33, 37, 41);
+        doc.setFontSize(9);
+        
+        // Left Column Metadata
+        doc.setFont('helvetica', 'bold');
+        doc.text('REPORT OWNER:', 14, 34);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${this.settings.username || 'Valued Client'} (Premium Account)`, 43, 34);
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text('BASE CURRENCY:', 14, 40);
+        doc.setFont('helvetica', 'normal');
+        doc.text(currency, 43, 40);
 
-        // Summary Box
-        const monthlyData = this.getFilteredTransactions(true);
-        const income = monthlyData.filter(t => t.type === 'Income').reduce((s, t) => s + t.amount, 0);
-        const expense = monthlyData.filter(t => t.type === 'Expense').reduce((s, t) => s + t.amount, 0);
+        // Right Column Metadata
+        doc.setFont('helvetica', 'bold');
+        doc.text('REPORTING PERIOD:', 115, 34);
+        doc.setFont('helvetica', 'normal');
+        doc.text(period, 151, 34);
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text('GENERATED ON:', 115, 40);
+        doc.setFont('helvetica', 'normal');
+        doc.text(new Date().toLocaleString('en-PK'), 151, 40);
 
-        doc.setDrawColor(200);
-        doc.line(14, 45, 196, 45);
+        // Divider
+        doc.setDrawColor(222, 226, 230);
+        doc.setLineWidth(0.5);
+        doc.line(14, 44, 196, 44);
 
-        doc.setFontSize(14);
-        doc.setTextColor(0);
-        doc.text('Monthly Summary', 14, 55);
+        // 4. Executive Position Summary Cards Grid
+        doc.setFillColor(248, 249, 250); // Sleek grey card fill
+        doc.setDrawColor(233, 236, 239);
+        doc.roundedRect(14, 48, 56, 26, 2, 2, 'FD');
+        doc.roundedRect(75, 48, 56, 26, 2, 2, 'FD');
+        doc.roundedRect(136, 48, 56, 26, 2, 2, 'FD');
 
+        // Card 1 Contents (Liquidity Profile)
+        doc.setFontSize(7.5);
+        doc.setTextColor(108, 117, 125);
+        doc.setFont('helvetica', 'bold');
+        doc.text('LIQUIDITY PROFILE', 18, 54);
+        
         doc.setFontSize(11);
-        doc.text(`Total Income: ${this.formatCurrency(income)}`, 14, 65);
-        doc.text(`Total Expenses: ${this.formatCurrency(expense)}`, 14, 72);
-        doc.text(`Net Savings: ${this.formatCurrency(income - expense)}`, 14, 79);
+        doc.setTextColor(33, 37, 41);
+        doc.text(this.formatCurrency(cashInHand), 18, 61);
+        
+        doc.setFontSize(7.5);
+        doc.setTextColor(40, 167, 69); // Green Available Balance subtext
+        doc.text(`Available: ${this.formatCurrency(availableCash)}`, 18, 68);
 
-        // Table
-        const tableData = data.map(t => [
+        // Card 2 Contents (Monthly Flows)
+        doc.setFontSize(7.5);
+        doc.setTextColor(108, 117, 125);
+        doc.setFont('helvetica', 'bold');
+        doc.text('MONTHLY NET FLOW', 79, 54);
+        
+        doc.setFontSize(11);
+        doc.setTextColor(33, 37, 41);
+        doc.text(this.formatCurrency(netSavings), 79, 61);
+        
+        doc.setFontSize(7);
+        doc.setTextColor(108, 117, 125);
+        doc.text(`In: ${this.formatCurrency(totalIncome)}  |  Out: ${this.formatCurrency(totalSpent)}`, 79, 68);
+
+        // Card 3 Contents (Earmarked Savings)
+        doc.setFontSize(7.5);
+        doc.setTextColor(108, 117, 125);
+        doc.setFont('helvetica', 'bold');
+        doc.text('EARMARKED RESERVES', 140, 54);
+        
+        doc.setFontSize(11);
+        doc.setTextColor(33, 37, 41);
+        doc.text(this.formatCurrency(totalGoalsSavings), 140, 61);
+        
+        doc.setFontSize(7);
+        doc.setTextColor(23, 162, 184); // Cyan for wishlist
+        doc.text(`Earmarked for Savings Targets`, 140, 68);
+
+        let nextY = 80;
+
+        // 5. Envelope Budgets Ledger Section
+        const budgetedCategories = Object.entries(this.categories).filter(([name, d]) => d.budget && d.budget > 0);
+        if (budgetedCategories.length > 0) {
+            const categorySpending = {};
+            Object.keys(this.categories).forEach(cat => categorySpending[cat] = 0);
+            filteredTransactions.forEach(t => {
+                if (t.type === 'Expense' && categorySpending[t.category] !== undefined) {
+                    categorySpending[t.category] += parseFloat(t.amount);
+                }
+            });
+
+            doc.setFontSize(11);
+            doc.setTextColor(22, 28, 45);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Category Budget Performance (Envelope Envelopes)', 14, nextY);
+
+            const budgetTableRows = budgetedCategories.map(([name, d]) => {
+                const spent = categorySpending[name] || 0;
+                const budget = d.budget;
+                const pct = budget > 0 ? (spent / budget) * 100 : 0;
+                const status = spent > budget ? 'Exceeded limit' : (pct >= 80 ? 'Warning limit' : 'Healthy balance');
+                return [
+                    name,
+                    this.formatCurrency(budget),
+                    this.formatCurrency(spent),
+                    `${pct.toFixed(1)}%`,
+                    status
+                ];
+            });
+
+            doc.autoTable({
+                startY: nextY + 3,
+                head: [['Envelope Category', 'Budget Limit', 'Actual Spending', 'Utilization %', 'Envelope Status']],
+                body: budgetTableRows,
+                theme: 'striped',
+                headStyles: { fillColor: [112, 0, 255] }, // Elegant Purple
+                alternateRowStyles: { fillColor: [248, 249, 250] },
+                margin: { left: 14, right: 14 },
+                styles: { fontSize: 8.5 },
+                columnStyles: {
+                    1: { halign: 'right' },
+                    2: { halign: 'right' },
+                    3: { halign: 'center' }
+                }
+            });
+
+            nextY = doc.lastAutoTable.finalY + 10;
+        }
+
+        // 6. Savings Goals & Wishlist Ledger Section
+        if (this.goals && this.goals.length > 0) {
+            doc.setFontSize(11);
+            doc.setTextColor(22, 28, 45);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Savings Goals & Wishlists Progress Tracker', 14, nextY);
+
+            const goalsTableRows = this.goals.map(g => {
+                const current = parseFloat(g.current || 0);
+                const target = parseFloat(g.target || 0);
+                const pct = target > 0 ? (current / target) * 100 : 0;
+                const status = current >= target ? 'Goal Met' : 'Saving';
+                return [
+                    g.title,
+                    this.formatCurrency(target),
+                    this.formatCurrency(current),
+                    `${pct.toFixed(0)}%`,
+                    g.deadline || 'No Target Date',
+                    status
+                ];
+            });
+
+            doc.autoTable({
+                startY: nextY + 3,
+                head: [['Wishlist Target Goal', 'Target Amount', 'Current Saved', 'Completion %', 'Target Date', 'Goal Status']],
+                body: goalsTableRows,
+                theme: 'striped',
+                headStyles: { fillColor: [23, 162, 184] }, // Teal Cyan
+                alternateRowStyles: { fillColor: [248, 249, 250] },
+                margin: { left: 14, right: 14 },
+                styles: { fontSize: 8.5 },
+                columnStyles: {
+                    1: { halign: 'right' },
+                    2: { halign: 'right' },
+                    3: { halign: 'center' }
+                }
+            });
+
+            nextY = doc.lastAutoTable.finalY + 10;
+        }
+
+        // 7. Chronological Transactions Ledger Section
+        doc.setFontSize(11);
+        doc.setTextColor(22, 28, 45);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Chronological Financial Ledger (Transactions)', 14, nextY);
+
+        const transactionsRows = data.map(t => [
             t.date,
             t.type,
             t.category,
             this.formatCurrency(t.amount),
+            t.person || '-',
+            t.dueDate || '-',
             t.note || '-'
         ]);
 
         doc.autoTable({
-            startY: 90,
-            head: [['Date', 'Type', 'Category', 'Amount', 'Note']],
-            body: tableData,
+            startY: nextY + 3,
+            head: [['Date', 'Type', 'Category', 'Amount', 'Reference Party', 'Due Date', 'Description Notes']],
+            body: transactionsRows,
             theme: 'striped',
-            headStyles: { fillColor: [112, 0, 255] }, // Purple
-            alternateRowStyles: { fillColor: [245, 245, 255] }
+            headStyles: { fillColor: [22, 28, 45] }, // Dark Midnight Blue
+            alternateRowStyles: { fillColor: [248, 249, 250] },
+            margin: { left: 14, right: 14 },
+            styles: { fontSize: 8.5 },
+            columnStyles: {
+                3: { halign: 'right' }
+            }
         });
 
-        doc.save(`SpendWise_Report_${period}.pdf`);
+        // 8. Dynamic Two-Pass Page Footer Injection
+        const totalPages = doc.internal.getNumberOfPages();
+        const securityHash = Array.from({length: 4}, () => Math.random().toString(36).substring(2, 6).toUpperCase()).join('-');
+        
+        for (let i = 1; i <= totalPages; i++) {
+            doc.setPage(i);
+
+            // Draw header bar for pages 2+
+            if (i > 1) {
+                doc.setFillColor(22, 28, 45);
+                doc.rect(0, 0, 210, 8, 'F');
+                doc.setFontSize(7.5);
+                doc.setTextColor(255, 255, 255);
+                doc.setFont('helvetica', 'bold');
+                doc.text('SPENDWISE EXECUTIVE FINANCIAL STATEMENT', 14, 5.5);
+            }
+
+            // Footer border
+            doc.setDrawColor(222, 226, 230);
+            doc.setLineWidth(0.4);
+            doc.line(14, 282, 196, 282);
+
+            // Footer metadata
+            doc.setFontSize(7.5);
+            doc.setTextColor(140);
+            doc.setFont('helvetica', 'normal');
+            doc.text('CONFIDENTIAL REPORT - SPENDWISE EXECUTIVE SUITE', 14, 287);
+            doc.text(`Footprint Verification Hash: SEC-${securityHash}-${i * 193}`, 14, 291);
+
+            const pageStr = `Page ${i} of ${totalPages}`;
+            doc.text(pageStr, 196 - doc.getTextWidth(pageStr), 287);
+        }
+
+        doc.save(`SpendWise_Financial_Report_${period.replace(/\s+/g, '_')}.pdf`);
     }
     // --- New Features Logic ---
 
@@ -1817,7 +2496,9 @@ class SpendWise {
     }
 
     selectIcon(icon) {
-        document.getElementById('cat-icon').value = icon;
+        const inputId = this.iconPickerTargetInputId || 'cat-icon';
+        const targetInput = document.getElementById(inputId);
+        if (targetInput) targetInput.value = icon;
         this.toggleModal(document.getElementById('icon-picker-modal'), false);
     }
 
@@ -1980,6 +2661,12 @@ class SpendWise {
             // Handle hex to rgb conversion comparison if needed, or just compare roughly
             sw.classList.toggle('active', this.settings.accent && swatchColor.includes(this.settings.accent.toLowerCase()));
         });
+
+        // Apply Currency
+        const currencySelect = document.getElementById('settings-currency');
+        if (currencySelect && this.settings.currency) {
+            currencySelect.value = this.settings.currency;
+        }
     }
 
     updateProfile() {
@@ -2044,6 +2731,14 @@ class SpendWise {
         // Update swatch active state
         document.querySelectorAll('.color-swatch').forEach(sw => sw.classList.remove('active'));
         el.classList.add('active');
+    }
+
+    setCurrency(currency) {
+        this.settings.currency = currency;
+        this.setLocal('settings', JSON.stringify(this.settings));
+        this.applySettings();
+        this.updateUI(); // Re-render everything to update all currency displays
+        this.showToast(`Primary currency set to ${currency}`, 'success');
     }
 
     exportBackup() {

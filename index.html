@@ -99,6 +99,10 @@
                     <i data-lucide="landmark"></i>
                     <span>Debt Vault</span>
                 </a>
+                <a href="#" class="nav-link" id="nav-goals">
+                    <i data-lucide="target"></i>
+                    <span>Goals Vault</span>
+                </a>
                 <a href="#" class="nav-link" id="nav-audit">
                     <i data-lucide="clipboard-list"></i>
                     <span>Audit Vault</span>
@@ -194,7 +198,7 @@
                             <div class="stat-info">
                                 <h3>Cash in Hand</h3>
                                 <p class="stat-value" id="cash-in-hand">PKR 0</p>
-                                <span class="stat-change positive">Current Liquidity</span>
+                                <span class="stat-change positive" id="cash-in-hand-subtitle">Current Liquidity</span>
                             </div>
                         </div>
                         <div class="stat-card glass clickable" id="budget-card">
@@ -242,6 +246,20 @@
                             <div class="chart-wrapper">
                                 <canvas id="categoryChart"></canvas>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Category Budgets Card -->
+                    <div class="glass" id="category-budgets-card" style="margin-top: 1.5rem; padding: 1.5rem; display: none;">
+                        <div class="chart-header" style="margin-bottom: 1.25rem; display: flex; flex-direction: column; align-items: flex-start; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.75rem;">
+                            <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="target" style="width: 20px; height: 20px; color: var(--primary);"></i>
+                                Category Budgets
+                            </h3>
+                            <p class="text-muted" style="font-size: 0.85rem; margin: 0.25rem 0 0 0;">Micro-manage your monthly spending limits</p>
+                        </div>
+                        <div class="category-budgets-grid" id="category-budgets-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;">
+                            <!-- Dynamically loaded progress bars -->
                         </div>
                     </div>
 
@@ -392,6 +410,23 @@
                 </div>
             </section>
 
+            <!-- Goals Vault View -->
+            <section id="view-goals" class="view">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <div>
+                        <h2>Goals Vault</h2>
+                        <p class="text-muted">Save for your dreams and wishlists</p>
+                    </div>
+                    <button class="btn-primary" id="add-goal-btn">
+                        <i data-lucide="plus"></i>
+                        <span>Add New Goal</span>
+                    </button>
+                </div>
+                <div class="goals-grid" id="goals-list-container">
+                    <!-- Goals cards will load here dynamically -->
+                </div>
+            </section>
+
             <!-- Audit View -->
             <section id="view-audit" class="view">
                 <div class="section-header">
@@ -508,6 +543,30 @@
                             <div class="color-swatch" style="background: #7000ff;" onclick="app.setAccent('#7000ff', this)" title="Purple"></div>
                             <div class="color-swatch" style="background: #ff0055;" onclick="app.setAccent('#ff0055', this)" title="Rose"></div>
                             <div class="color-swatch" style="background: #00ff88;" onclick="app.setAccent('#00ff88', this)" title="Emerald"></div>
+                        </div>
+                    </div>
+
+                    <!-- Regional Settings Card -->
+                    <div class="glass settings-card">
+                        <div class="card-header">
+                            <i data-lucide="globe"></i>
+                            <h3>Regional Settings</h3>
+                        </div>
+                        <div class="form-group">
+                            <label>Primary Currency</label>
+                            <div class="custom-select-wrapper">
+                                <select id="settings-currency" onchange="app.setCurrency(this.value)" style="width: 100%; padding: 0.8rem; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--bg-card); color: var(--text-main); font-family: inherit; -webkit-appearance: none; appearance: none;">
+                                    <option value="USD">USD ($)</option>
+                                    <option value="EUR">EUR (€)</option>
+                                    <option value="GBP">GBP (£)</option>
+                                    <option value="PKR">PKR (₨)</option>
+                                    <option value="INR">INR (₹)</option>
+                                    <option value="AUD">AUD (A$)</option>
+                                    <option value="CAD">CAD (C$)</option>
+                                    <option value="JPY">JPY (¥)</option>
+                                </select>
+                                <i data-lucide="chevron-down" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text-muted); width: 16px; height: 16px;"></i>
+                            </div>
                         </div>
                     </div>
 
@@ -666,8 +725,88 @@
                         <input type="color" id="cat-color" value="#00e5ff">
                     </div>
                 </div>
+                <div class="form-group">
+                    <label for="cat-budget">Monthly Budget Limit (Optional)</label>
+                    <input type="number" id="cat-budget" placeholder="e.g. 500 (0 or leave empty for no limit)" min="0" step="any">
+                </div>
                 <p class="form-hint">Tip: Use icon names from <a href="https://lucide.dev/icons" target="_blank">lucide.dev</a></p>
                 <button type="submit" class="btn-submit" id="category-submit-btn">Add Category</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Adding/Editing Goal -->
+    <div id="goal-modal" class="modal">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2 id="goal-modal-title">Create Savings Goal</h2>
+                <button class="close-modal" id="close-goal-modal">&times;</button>
+            </div>
+            <form id="goal-form">
+                <div class="form-group">
+                    <label for="goal-title">Goal Title</label>
+                    <input type="text" id="goal-title" placeholder="e.g. New Macbook Pro" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="goal-target">Target Amount</label>
+                        <input type="number" id="goal-target" min="1" step="any" placeholder="e.g. 2000" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="goal-current">Starting Amount (Optional)</label>
+                        <input type="number" id="goal-current" min="0" step="any" placeholder="e.g. 100" value="0">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="goal-color">Theme Color</label>
+                        <input type="color" id="goal-color" value="#00e5ff">
+                    </div>
+                    <div class="form-group">
+                        <label for="goal-deadline">Target Date (Optional)</label>
+                        <input type="date" id="goal-deadline">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="goal-icon">Icon Name</label>
+                    <div class="icon-input-group">
+                        <input type="text" id="goal-icon" placeholder="e.g. trophy" required>
+                        <button type="button" class="icon-btn-small" id="open-goal-icon-picker" title="Browse Icons">
+                            <i data-lucide="search"></i>
+                        </button>
+                    </div>
+                </div>
+                <p class="form-hint">Tip: Use icon names from <a href="https://lucide.dev/icons" target="_blank">lucide.dev</a></p>
+                <button type="submit" class="btn-submit" id="goal-submit-btn">Create Goal</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Managing Goal Funds -->
+    <div id="goal-allocate-modal" class="modal">
+        <div class="modal-content glass" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Manage Goal Funds</h2>
+                <button class="close-modal" id="close-goal-allocate-modal">&times;</button>
+            </div>
+            <form id="goal-allocate-form">
+                <input type="hidden" id="goal-allocate-id">
+                <div class="form-group">
+                    <label>Goal Name</label>
+                    <input type="text" id="goal-allocate-title" readonly style="background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); color: var(--text-muted); cursor: not-allowed;">
+                </div>
+                <div class="form-group">
+                    <label for="goal-allocate-type">Transaction Type</label>
+                    <select id="goal-allocate-type" required>
+                        <option value="allocate">Allocate (Add Funds from Cash)</option>
+                        <option value="withdraw">Withdraw (Return Funds to Cash)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="goal-allocate-amount">Amount</label>
+                    <input type="number" id="goal-allocate-amount" min="0.01" step="any" placeholder="Enter amount..." required>
+                </div>
+                <button type="submit" class="btn-submit">Confirm Transaction</button>
             </form>
         </div>
     </div>
