@@ -301,7 +301,7 @@ body {
     width: 100%;
     padding: 0.75rem;
     margin-top: 1rem;
-    background: var(--primary-gradient);
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
     border: none;
     border-radius: 12px;
     color: white;
@@ -692,6 +692,12 @@ body {
 }
 
 /* Light Mode Hard Fixes */
+.theme-light .view-title-box h1 {
+    background: linear-gradient(135deg, #0f172a 0%, var(--primary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
 .theme-light .filter-bar {
     background: #ffffff !important;
     border-color: #e2e8f0 !important;

@@ -603,7 +603,7 @@ class SpendWise {
         // Update Lists & Charts
         this.renderTransactions();
         this.renderFullTransactions();
-        this.renderAuditVault(); // Ensure Audit Log is refreshed
+        this.renderAuditLog(); // Ensure Audit Log is refreshed
         this.updateCharts(monthlyData);
         this.renderExtendedAnalytics(monthlyData);
 
@@ -975,8 +975,8 @@ class SpendWise {
                 if (old.note !== t.note) changes.push(`Note updated`);
                 
                 this.logAction('EDIT', `Transaction #${this.editingId}`, changes.join(' | ') || 'Updated details', {
-                    old: old,
-                    new: t
+                    from: `${this.formatCurrency(old.amount)} (${old.type})`,
+                    to: `${this.formatCurrency(t.amount)} (${t.type})`
                 });
                 
                 // CRITICAL: Re-index to ensure IDs stay sequential if date order changed
@@ -1148,32 +1148,7 @@ class SpendWise {
         });
     }
 
-    renderAuditVault() {
-        if (!this.auditLogListEl) return;
 
-        if (this.auditLog.length === 0) {
-            this.auditLogListEl.innerHTML = '<div class="empty-state"><p>No audit logs found.</p></div>';
-            return;
-        }
-
-        this.auditLogListEl.innerHTML = this.auditLog.map(log => `
-            <div class="audit-item glass">
-                <div class="audit-icon ${log.action.toLowerCase()}">
-                    <i data-lucide="${this.getAuditIcon(log.action)}"></i>
-                </div>
-                <div class="audit-content">
-                    <div class="audit-header">
-                        <span class="audit-action">${log.action}</span>
-                        <span class="audit-time">${new Date(log.timestamp).toLocaleString()}</span>
-                    </div>
-                    <div class="audit-target">${log.target}</div>
-                    <div class="audit-message">${log.message}</div>
-                </div>
-            </div>
-        `).join('');
-
-        if (window.lucide) lucide.createIcons();
-    }
 
     getAuditIcon(action) {
         switch(action) {
