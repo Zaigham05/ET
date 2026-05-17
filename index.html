@@ -103,6 +103,26 @@
                     <i data-lucide="target"></i>
                     <span>Goals Vault</span>
                 </a>
+                <a href="#" class="nav-link" id="nav-insights">
+                    <i data-lucide="sparkles"></i>
+                    <span>AI Insights</span>
+                </a>
+                <a href="#" class="nav-link" id="nav-recurring">
+                    <i data-lucide="calendar-days"></i>
+                    <span>Bills Planner</span>
+                </a>
+                <a href="#" class="nav-link" id="nav-wealth">
+                    <i data-lucide="line-chart"></i>
+                    <span>Wealth Hub</span>
+                </a>
+                <a href="#" class="nav-link" id="nav-quests">
+                    <i data-lucide="award"></i>
+                    <span>SpendWise Quests</span>
+                </a>
+                <a href="#" class="nav-link" id="nav-shared">
+                    <i data-lucide="users"></i>
+                    <span>Shared Wallets</span>
+                </a>
                 <a href="#" class="nav-link" id="nav-audit">
                     <i data-lucide="clipboard-list"></i>
                     <span>Audit Vault</span>
@@ -111,21 +131,21 @@
                     <i data-lucide="calendar"></i>
                     <span>Calendar Vault</span>
                 </a>
-                <a href="#" class="nav-link" id="nav-settings">
+                <a href="#" class="nav-link" id="nav-settings" style="display: none;">
                     <i data-lucide="settings"></i>
                     <span>Settings</span>
                 </a>
             </nav>
             
             <!-- Logout Button -->
-            <div class="logout-container" style="margin-top: auto; padding: 2rem;">
+            <div class="logout-container" style="margin-top: auto; padding: 2rem; display: none;">
                 <button class="nav-item" style="width: 100%; border: none; background: rgba(255, 77, 109, 0.1); color: #ff4d6d; font-weight: 600; padding: 1rem; border-radius: 12px; display: flex; align-items: center; gap: 0.75rem; cursor: pointer; transition: all 0.3s;" onclick="app.logout()">
                     <i data-lucide="log-out"></i>
                     <span>Secure Logout</span>
                 </button>
             </div>
 
-            <div class="user-profile" id="sidebar-user-profile">
+            <div class="user-profile" id="sidebar-user-profile" style="display: none;">
                 <div class="avatar">MH</div>
                 <div class="user-info">
                     <p class="user-name">Mr Hacker</p>
@@ -158,10 +178,19 @@
                             <!-- Dynamic months -->
                         </select>
                     </div>
-                    <div class="header-actions">
+                    <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
                         <button class="btn-primary pulse" id="add-expense-btn">
                             <i data-lucide="plus"></i>
                             <span>Add Transaction</span>
+                        </button>
+                        <button class="btn-secondary" id="header-settings-btn" style="border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.03); color: var(--text-main); font-weight: 600; padding: 0.6rem 1.2rem; border-radius: 12px; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; transition: all 0.3s; font-size: 0.85rem;" onclick="window.app.switchView('settings')">
+                            <i data-lucide="settings" style="width: 16px; height: 16px;"></i>
+                            <span>Settings</span>
+                        </button>
+                        <button class="btn-secondary" id="header-logout-btn" style="border: 1px solid rgba(255, 77, 109, 0.2); background: rgba(255, 77, 109, 0.08); color: #ff4d6d; font-weight: 600; padding: 0.6rem 1.2rem; border-radius: 12px; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; transition: all 0.3s; font-size: 0.85rem;" onclick="window.app.logout()">
+                            <i data-lucide="log-out" style="width: 16px; height: 16px;"></i>
+                            <span>Logout</span>
+                        </button>
                     </div>
                 </div>
             </header>
@@ -312,6 +341,444 @@
                 </div>
                 <div class="category-grid" id="category-list">
                     <!-- Categories loaded dynamically -->
+                </div>
+            </section>
+
+            <!-- AI Insights View -->
+            <section id="view-insights" class="view">
+                <div class="section-header" style="margin-bottom: 1.5rem;">
+                    <h2>AI Insights Vault</h2>
+                    <p class="text-muted">Smart advisor analysis & spending forecasts</p>
+                </div>
+                
+                <div class="insights-layout-grid" style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 1.5rem; align-items: start;">
+                    <!-- Left side: AI Advisor Chat & Prompt Chips -->
+                    <div class="glass" style="padding: 1.5rem; border-radius: 18px; display: flex; flex-direction: column; height: 580px;">
+                        <h3 style="margin-bottom: 1rem; color: var(--text-main); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="sparkles" style="color: var(--primary); width: 18px; height: 18px;"></i>
+                            AI Financial Advisor
+                        </h3>
+                        
+                        <div id="ai-chat-log" style="flex-grow: 1; overflow-y: auto; padding: 0.5rem; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 12px; max-height: 380px;">
+                            <!-- Conversational bubbles load here -->
+                            <div class="ai-bubble incoming" style="background: rgba(0, 229, 255, 0.08); border: 1px solid rgba(0, 229, 255, 0.15); color: var(--text-main); padding: 10px 14px; border-radius: 16px 16px 16px 4px; max-width: 85%; font-size: 0.9rem; align-self: flex-start; line-height: 1.4;">
+                                Hello! I am your SpendWise Financial Advisor. Tap any prompt chip below, or ask me directly to analyze your financial health!
+                            </div>
+                        </div>
+
+                        <!-- Prompt Chips -->
+                        <div class="prompt-chips-container" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem;">
+                            <button class="prompt-chip" data-prompt="Analyze my monthly trends">🔍 Monthly Summary</button>
+                            <button class="prompt-chip" data-prompt="Check category budget velocity">📊 Budget Velocities</button>
+                            <button class="prompt-chip" data-prompt="How can I save more cash?">💡 Saving Strategies</button>
+                        </div>
+                        
+                        <!-- Custom Input -->
+                        <form id="ai-chat-form" style="display: flex; gap: 8px;">
+                            <input type="text" id="ai-chat-input" placeholder="Ask your advisor anything..." required style="flex-grow: 1; padding: 0.75rem 1rem; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0,0,0,0.2); color: var(--text-main); font-size: 0.9rem;">
+                            <button class="btn-primary" type="submit" style="padding: 0 1.25rem; border-radius: 12px;">
+                                <i data-lucide="send" style="width: 16px; height: 16px;"></i>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Right side: Affordability Form & Alert Board -->
+                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                        <!-- Affordability Card -->
+                        <div class="glass" style="padding: 1.5rem; border-radius: 18px;">
+                            <h3 style="margin-bottom: 1rem; color: var(--text-main); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="help-circle" style="color: var(--primary); width: 18px; height: 18px;"></i>
+                                Purchase Affordability Calculator
+                            </h3>
+                            <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 1.25rem;">Input a planned purchase price to see if your cash flow and budget envelopes can comfortably accommodate it.</p>
+                            
+                            <form id="affordability-form" style="display: flex; gap: 12px; margin-bottom: 1.25rem;">
+                                <div style="position: relative; flex-grow: 1;">
+                                    <input type="number" id="affordability-price" placeholder="Enter purchase price..." required min="0" step="any" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0,0,0,0.2); color: var(--text-main); font-size: 0.9rem;">
+                                </div>
+                                <button class="btn-primary" type="submit" style="padding: 0 1.5rem; border-radius: 12px;">Evaluate</button>
+                            </form>
+                            
+                            <!-- Result Box -->
+                            <div id="affordability-result-box" class="glass" style="padding: 1rem; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05); display: none;">
+                                <!-- Affordability results load dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Spend Velocity Alerts -->
+                        <div class="glass" style="padding: 1.5rem; border-radius: 18px;">
+                            <h3 style="margin-bottom: 1rem; color: var(--text-main); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="alert-triangle" style="color: #ffb300; width: 18px; height: 18px;"></i>
+                                Spend Velocity Warning Board
+                            </h3>
+                            <div id="insights-alerts-container" style="display: flex; flex-direction: column; gap: 10px;">
+                                <!-- Dynamic alerts load here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI-Powered Cash Flow Forecaster Panel -->
+                <div class="glass" style="margin-top: 1.5rem; padding: 1.5rem; border-radius: 18px; display: flex; flex-direction: column; gap: 1.25rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <h3 style="color: var(--text-main); font-size: 1.2rem; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                <i data-lucide="line-chart" style="color: var(--primary); width: 20px; height: 20px;"></i>
+                                AI Cash Flow Forecaster & Balance Predictor
+                            </h3>
+                            <p class="text-muted" style="font-size: 0.85rem;">Interactive 30-day projection of your cash availability based on daily spend pace, goal transfers, and subscription reserves.</p>
+                        </div>
+                        <!-- Quick Stats Badge Row -->
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <div class="forecast-badge" style="background: rgba(0, 255, 136, 0.08); border: 1px solid rgba(0, 255, 136, 0.15); color: #00ff88; padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                                <i data-lucide="shield-check" style="width: 14px; height: 14px;"></i>
+                                <span id="forecast-status-label">Forecasting System Active</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 2.5fr 1fr; gap: 1.5rem; align-items: stretch;">
+                        <!-- The Graph Container -->
+                        <div class="glass" style="padding: 1rem; border-radius: 12px; background: rgba(0,0,0,0.15); position: relative; height: 350px;">
+                            <canvas id="forecastChart" style="width: 100%; height: 100%;"></canvas>
+                        </div>
+                        
+                        <!-- Forecast Insights Sidebar -->
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <!-- Safety Reserve Card -->
+                            <div class="glass" style="padding: 1rem; border-radius: 12px; border: 1px solid rgba(0, 229, 255, 0.1); background: rgba(0, 229, 255, 0.02);">
+                                <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 2px;">Predicted Cash-in-Hand (30d)</span>
+                                <h4 id="forecast-end-balance" style="font-size: 1.25rem; font-weight: 700; color: var(--text-main); margin-bottom: 4px;">PKR 0</h4>
+                                <p id="forecast-net-change" style="font-size: 0.75rem; font-weight: 600; color: #00ff88; margin: 0;">--</p>
+                            </div>
+                            
+                            <!-- Safety Metric Progress -->
+                            <div class="glass" style="padding: 1rem; border-radius: 12px;">
+                                <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Cash Exhaustion Index</span>
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                                    <span id="forecast-exhaustion-label" style="font-size: 0.8rem; font-weight: 600; color: #00ff88;">Ultra Safe</span>
+                                    <span id="forecast-exhaustion-percent" style="font-size: 0.8rem; font-weight: 700; color: var(--text-main);">0%</span>
+                                </div>
+                                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
+                                    <div id="forecast-exhaustion-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #00ff88, #00b3ff); border-radius: 3px; transition: width 0.5s;"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Tactical AI Recommendation -->
+                            <div class="glass" style="padding: 1rem; border-radius: 12px; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; border-left: 3px solid var(--primary);">
+                                <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">AI Forecaster Advice</span>
+                                <p id="forecast-ai-tip" style="font-size: 0.8rem; color: var(--text-main); line-height: 1.4; margin: 0;">Scanning data patterns to compile future savings potential...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Bills Planner View -->
+            <section id="view-recurring" class="view">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <div>
+                        <h2>Bills & Subscriptions Planner</h2>
+                        <p class="text-muted">Manage recurring dues and proactive liquidity reserves</p>
+                    </div>
+                    <button class="btn-primary" id="add-subscription-btn">
+                        <i data-lucide="plus"></i>
+                        <span>Add Recurring Bill</span>
+                    </button>
+                </div>
+                
+                <div class="recurring-layout-grid" style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; align-items: start;">
+                    <!-- Active Subscriptions List -->
+                    <div class="glass" style="padding: 1.5rem; border-radius: 18px;">
+                        <h3 style="margin-bottom: 1.25rem; color: var(--text-main); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="repeat" style="color: var(--primary); width: 18px; height: 18px;"></i>
+                            Active Recurring Bills
+                        </h3>
+                        <div id="subscriptions-list-container" style="display: flex; flex-direction: column; gap: 12px;">
+                            <!-- Subscription items load dynamically -->
+                        </div>
+                    </div>
+                    
+                    <!-- Sidebar: Mini Calendar View & Statistics Card -->
+                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                        <!-- Subscription Calendar Card -->
+                        <div class="glass" style="padding: 1.5rem; border-radius: 18px;">
+                            <h3 style="margin-bottom: 1rem; color: var(--text-main); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="calendar" style="color: var(--primary); width: 18px; height: 18px;"></i>
+                                Billing Calendar: <span id="recurring-calendar-month-name">May 2026</span>
+                            </h3>
+                            <div class="recurring-calendar-grid" id="recurring-calendar-grid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 0.8rem; margin-top: 1rem;">
+                                <!-- Calendar cells populated dynamically -->
+                            </div>
+                        </div>
+                        
+                        <!-- Recurring Summary Card -->
+                        <div class="glass" style="padding: 1.5rem; border-radius: 18px; background: linear-gradient(135deg, rgba(0, 229, 255, 0.05), rgba(112, 0, 255, 0.05)); border: 1px solid rgba(0, 229, 255, 0.15);">
+                            <h3 style="margin-bottom: 1rem; color: var(--text-main); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="wallet" style="color: var(--primary); width: 18px; height: 18px;"></i>
+                                Subscription Monthly Summary
+                            </h3>
+                            <div style="display: flex; flex-direction: column; gap: 12px; font-size: 0.9rem;">
+                                <div style="display: flex; justify-content: space-between; color: var(--text-muted);">
+                                    <span>Total Subscriptions Tracked:</span>
+                                    <span id="sub-stat-count" style="font-weight: 600; color: var(--text-main);">0</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; color: var(--text-muted);">
+                                    <span>Unpaid Monthly Reserves:</span>
+                                    <span id="sub-stat-unpaid" style="font-weight: 600; color: var(--secondary);">PKR 0</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; color: var(--text-muted);">
+                                    <span>Settled This Month:</span>
+                                    <span id="sub-stat-paid" style="font-weight: 600; color: #00ff88;">PKR 0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Wealth Hub View -->
+            <section id="view-wealth" class="view">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <div>
+                        <h2>Wealth Hub & Portfolios</h2>
+                        <p class="text-muted">Track Stocks, Crypto, Gold, and Real Estate investments</p>
+                    </div>
+                    <button class="btn-primary" id="add-asset-btn">
+                        <i data-lucide="plus"></i>
+                        <span>Add Asset</span>
+                    </button>
+                </div>
+
+                <!-- Wealth Stats Card Grid -->
+                <div class="analytics-summary-grid" style="margin-bottom: 1.5rem;">
+                    <div class="summary-stat glass wealth-card-silver">
+                        <span class="label">Total Net Worth</span>
+                        <h4 id="wealth-net-worth">PKR 0</h4>
+                        <p class="stat-trend positive" id="wealth-net-worth-change">Liquidity + Assets</p>
+                    </div>
+                    <div class="summary-stat glass wealth-card-gold">
+                        <span class="label">Invested Capital</span>
+                        <h4 id="wealth-invested">PKR 0</h4>
+                        <p class="stat-trend" id="wealth-invested-sub">Total Acquisition Cost</p>
+                    </div>
+                    <div class="summary-stat glass wealth-card-emerald">
+                        <span class="label">Current Portfolio Value</span>
+                        <h4 id="wealth-current-val">PKR 0</h4>
+                        <p class="stat-trend positive" id="wealth-total-return">+0.00% Net Yield</p>
+                    </div>
+                    <div class="summary-stat glass wealth-card-bronze">
+                        <span class="label">Asset Distribution</span>
+                        <h4 id="wealth-asset-count">0 Assets</h4>
+                        <p class="stat-trend" id="wealth-distribution-label">Tracked Portfolios</p>
+                    </div>
+                </div>
+
+                <div class="analytics-insights-row" style="margin-bottom: 1.5rem;">
+                    <!-- Allocation Circular Chart -->
+                    <div class="insight-card glass" style="flex: 1;">
+                        <div class="chart-header">
+                            <h3>Asset Allocation Model</h3>
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: space-around; gap: 20px; padding: 1rem;">
+                            <!-- SVG Allocation Wheel -->
+                            <div style="position: relative; width: 140px; height: 140px;">
+                                <svg viewBox="0 0 36 36" style="transform: rotate(-90deg); width: 100%; height: 100%;">
+                                    <!-- Base Circle -->
+                                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="3" />
+                                    <!-- Stocks slice -->
+                                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#00b3ff" stroke-width="3.2" stroke-dasharray="0 100" stroke-dashoffset="0" id="allocation-stocks" class="allocation-slice" />
+                                    <!-- Crypto slice -->
+                                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#a855f7" stroke-width="3.2" stroke-dasharray="0 100" stroke-dashoffset="0" id="allocation-crypto" class="allocation-slice" />
+                                    <!-- Gold slice -->
+                                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#eab308" stroke-width="3.2" stroke-dasharray="0 100" stroke-dashoffset="0" id="allocation-gold" class="allocation-slice" />
+                                    <!-- Real Estate slice -->
+                                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#10b981" stroke-width="3.2" stroke-dasharray="0 100" stroke-dashoffset="0" id="allocation-realestate" class="allocation-slice" />
+                                </svg>
+                                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                                    <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Assets</span>
+                                    <div id="allocation-total-ratio" style="font-size: 1.1rem; font-weight: 700; color: var(--text-main);">100%</div>
+                                </div>
+                            </div>
+                            <!-- Legend list -->
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;">
+                                    <span style="width: 10px; height: 10px; border-radius: 50%; background: #00b3ff;"></span>
+                                    <span class="text-muted">Stocks:</span>
+                                    <span id="ratio-stocks-pct" style="font-weight: 600; color: var(--text-main);">0%</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;">
+                                    <span style="width: 10px; height: 10px; border-radius: 50%; background: #a855f7;"></span>
+                                    <span class="text-muted">Crypto:</span>
+                                    <span id="ratio-crypto-pct" style="font-weight: 600; color: var(--text-main);">0%</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;">
+                                    <span style="width: 10px; height: 10px; border-radius: 50%; background: #eab308;"></span>
+                                    <span class="text-muted">Gold:</span>
+                                    <span id="ratio-gold-pct" style="font-weight: 600; color: var(--text-main);">0%</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;">
+                                    <span style="width: 10px; height: 10px; border-radius: 50%; background: #10b981;"></span>
+                                    <span class="text-muted">Real Estate:</span>
+                                    <span id="ratio-realestate-pct" style="font-weight: 600; color: var(--text-main);">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Empty/Quick tips -->
+                    <div class="insight-card glass" style="flex: 1.2;">
+                        <div class="chart-header">
+                            <h3>Asset Allocation Strategy Advisor</h3>
+                        </div>
+                        <div style="padding: 1rem; display: flex; flex-direction: column; gap: 12px; font-size: 0.85rem;">
+                            <p class="text-muted" style="line-height: 1.5;">To reduce portfolio risk, SpendWise scans your asset diversification and generates real-time allocation advice:</p>
+                            <div class="glass" style="border-left: 3px solid #00b3ff; padding: 10px; border-radius: 6px;">
+                                <div style="font-weight: 600; color: var(--text-main); margin-bottom: 2px;">Diversification Standard Target</div>
+                                <span class="text-muted">50% Stocks | 15% Crypto | 15% Gold | 20% Real Estate. Keep assets balanced to avoid localized market crashes!</span>
+                            </div>
+                            <div id="wealth-advice-box" class="glass" style="border-left: 3px solid #00ff88; padding: 10px; border-radius: 6px;">
+                                <div style="font-weight: 600; color: var(--text-main); margin-bottom: 2px;">Advisor Scan Status</div>
+                                <span class="text-muted" id="wealth-advice-text">Add your holdings using the "+ Add Asset" button to run the analytical scan.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Asset Portfolio Grid -->
+                <div class="glass" style="padding: 1.5rem; border-radius: 12px;">
+                    <h3 style="margin-bottom: 1rem; color: var(--text-main); font-weight: 600; font-size: 1.05rem;">Holdings Ledger</h3>
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid var(--glass-border); color: var(--text-muted); font-weight: 600;">
+                                    <th style="padding: 10px 8px;">Asset Name</th>
+                                    <th style="padding: 10px 8px;">Type</th>
+                                    <th style="padding: 10px 8px;">Quantity</th>
+                                    <th style="padding: 10px 8px;">Buy Price</th>
+                                    <th style="padding: 10px 8px;">Current Price</th>
+                                    <th style="padding: 10px 8px;">Cost Valuation</th>
+                                    <th style="padding: 10px 8px;">Current Valuation</th>
+                                    <th style="padding: 10px 8px; text-align: right;">Net Profit/Loss</th>
+                                    <th style="padding: 10px 8px; text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wealth-ledger-tbody">
+                                <!-- Dynamic assets injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SpendWise Quests View -->
+            <section id="view-quests" class="view">
+                <div class="section-header" style="margin-bottom: 1.5rem;">
+                    <h2>SpendWise Quests & Achievements</h2>
+                    <p class="text-muted">Earn points, unlock glowing badges, and optimize your Financial Health Score</p>
+                </div>
+
+                <div class="analytics-insights-row" style="margin-bottom: 1.5rem; display: flex; gap: 20px;">
+                    <!-- Massive Glowing Health Gauge -->
+                    <div class="insight-card glass" style="flex: 1; text-align: center; padding: 2rem; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <h3 style="margin-bottom: 1rem; font-weight: 600; color: var(--text-main);">Financial Health Score</h3>
+                        <div class="quests-gauge-container">
+                            <svg viewBox="0 0 36 36">
+                                <circle cx="18" cy="18" r="15.915" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="3" />
+                                <circle cx="18" cy="18" r="15.915" fill="none" stroke="url(#scoreGrad)" stroke-width="3.2" stroke-dasharray="0 100" stroke-linecap="round" id="health-score-fill" />
+                                <defs>
+                                    <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#00b3ff" />
+                                        <stop offset="50%" stop-color="#a855f7" />
+                                        <stop offset="100%" stop-color="#00ff88" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                            <div class="quests-gauge-value">
+                                <span id="health-score-value">0</span>
+                                <label id="health-score-grade">Evaluating</label>
+                            </div>
+                        </div>
+                        <p class="text-muted" style="font-size: 0.8rem; margin-top: 1rem; max-width: 250px;" id="health-score-sub">Your real-time score updates dynamically as you manage budgets, settle debts, and save.</p>
+                    </div>
+
+                    <!-- Quests Progress Grid -->
+                    <div class="insight-card glass" style="flex: 1.5; padding: 1.5rem;">
+                        <h3 style="margin-bottom: 1rem; font-weight: 600; color: var(--text-main);">Active Quests</h3>
+                        <div style="display: flex; flex-direction: column; gap: 12px;" id="quests-challenges-list">
+                            <!-- Injected dynamically or standard quest list -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Glowing Badges Drawer -->
+                <div class="glass" style="padding: 1.5rem; border-radius: 12px;">
+                    <h3 style="margin-bottom: 1rem; color: var(--text-main); font-weight: 600; font-size: 1.05rem;">Unlocked Financial Badges</h3>
+                    <div class="quests-badges-grid" id="quests-badges-container">
+                        <!-- Badges list rendered here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Shared Wallets View -->
+            <section id="view-shared" class="view">
+                <div class="section-header" style="margin-bottom: 1.5rem;">
+                    <h2>Shared Wallets & Collaborative Vaults</h2>
+                    <p class="text-muted">Split household expenses, coordinate group budgets, and trace live feeds</p>
+                </div>
+
+                <div class="analytics-insights-row" style="margin-bottom: 1.5rem; display: flex; gap: 20px;">
+                    <!-- Split Calculator Form -->
+                    <div class="insight-card glass" style="flex: 1.2; padding: 1.5rem;">
+                        <h3 style="margin-bottom: 1rem; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="calculator" style="color: #00b3ff;"></i>
+                            <span>Interactive Group Bill Splitter</span>
+                        </h3>
+                        <form id="shared-split-form" style="display: flex; flex-direction: column; gap: 12px;">
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">Expense Description</label>
+                                <input type="text" id="split-title" placeholder="e.g. Room Rent or Dinner Party" required style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); color: var(--text-main); font-size: 0.85rem;">
+                            </div>
+                            <div style="display: flex; gap: 12px;">
+                                <div style="flex: 1;">
+                                    <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">Total Cost Amount</label>
+                                    <input type="number" id="split-amount" placeholder="0" required min="1" step="any" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); color: var(--text-main); font-size: 0.85rem;">
+                                </div>
+                                <div style="flex: 1;">
+                                    <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">Category Envelope</label>
+                                    <select id="split-category" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); color: var(--text-main); font-size: 0.85rem; height: 35px;">
+                                        <!-- Populated dynamically -->
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">Group Members (comma separated)</label>
+                                <input type="text" id="split-members" placeholder="e.g. Sarah, Zack, Michael" required style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); color: var(--text-main); font-size: 0.85rem;">
+                            </div>
+                            <button type="submit" class="btn-primary" style="padding: 10px; width: 100%; border-radius: 8px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(135deg, #00b3ff, #a855f7);">
+                                <i data-lucide="share-2"></i>
+                                <span>Calculate & Split Bill</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Shared activity Feed -->
+                    <div class="insight-card glass" style="flex: 1; padding: 1.5rem; display: flex; flex-direction: column; max-height: 380px;">
+                        <h3 style="margin-bottom: 1rem; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="activity" style="color: #00ff88;"></i>
+                            <span>Live Collaborative Feed</span>
+                        </h3>
+                        <div class="shared-activity-container" id="shared-activity-feed" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;">
+                            <!-- Injected activity feeds -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Split Ledger -->
+                <div class="glass" style="padding: 1.5rem; border-radius: 12px;">
+                    <h3 style="margin-bottom: 1rem; color: var(--text-main); font-weight: 600; font-size: 1.05rem;">Split Group Expenses Summary</h3>
+                    <div class="shared-split-grid" id="shared-split-ledger">
+                        <!-- Dynamic split cards -->
+                    </div>
                 </div>
             </section>
 
@@ -807,6 +1274,88 @@
                     <input type="number" id="goal-allocate-amount" min="0.01" step="any" placeholder="Enter amount..." required>
                 </div>
                 <button type="submit" class="btn-submit">Confirm Transaction</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Adding/Editing Subscription -->
+    <div id="subscription-modal" class="modal">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2 id="subscription-modal-title">Add Recurring Bill</h2>
+                <button class="close-modal" id="close-subscription-modal">&times;</button>
+            </div>
+            <form id="subscription-form">
+                <div class="form-group">
+                    <label for="sub-name">Subscription Name</label>
+                    <input type="text" id="sub-name" placeholder="e.g. Netflix, Rent, Gym" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="sub-cost">Monthly Cost</label>
+                        <input type="number" id="sub-cost" min="0.01" step="any" placeholder="0.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="sub-due-day">Due Day of Month</label>
+                        <input type="number" id="sub-due-day" min="1" max="28" placeholder="1-28" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="sub-category">Category Envelope</label>
+                    <select id="sub-category" required>
+                        <!-- Populated dynamically via javascript -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="sub-icon">Lucide Icon Name</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="sub-icon" placeholder="e.g. tv, home, heart" value="repeat" required style="flex-grow: 1;">
+                        <button type="button" class="btn-secondary" id="browse-sub-icons-btn" style="padding: 0 15px; border-radius: 10px;">
+                            <i data-lucide="search"></i>
+                        </button>
+                    </div>
+                </div>
+                <button type="submit" class="btn-submit" id="sub-submit-btn">Save Recurring Bill</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Wealth Asset Modal -->
+    <div id="wealth-modal" class="modal">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h3 id="wealth-modal-title" style="color: var(--text-main); font-weight: 700; font-size: 1.2rem;">Add Portfolio Asset</h3>
+                <button class="close-modal" id="close-wealth-modal">&times;</button>
+            </div>
+            <form id="wealth-form" style="display: flex; flex-direction: column; gap: 12px; margin-top: 1rem;">
+                <div class="form-group">
+                    <label for="wealth-name" style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Asset Name / Symbol</label>
+                    <input type="text" id="wealth-name" placeholder="e.g. AAPL Stocks, Bitcoin, Gold Bar" required style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); color: var(--text-main);">
+                </div>
+                <div class="form-group">
+                    <label for="wealth-type" style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Asset Classification</label>
+                    <select id="wealth-type" required style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); color: var(--text-main); height: 35px;">
+                        <option value="Stocks">Stocks</option>
+                        <option value="Crypto">Cryptocurrencies</option>
+                        <option value="Gold">Gold / Precious Metals</option>
+                        <option value="Real Estate">Real Estate</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="wealth-qty" style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Quantity Owned</label>
+                        <input type="number" id="wealth-qty" placeholder="e.g. 10" required step="any" min="0.00000001" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); color: var(--text-main);">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="wealth-buy-price" style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Avg. Buy Price</label>
+                        <input type="number" id="wealth-buy-price" placeholder="0" required step="any" min="0" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); color: var(--text-main);">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="wealth-current-price" style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Current Valuation Price</label>
+                    <input type="number" id="wealth-current-price" placeholder="0" required step="any" min="0" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); color: var(--text-main);">
+                </div>
+                <button type="submit" class="btn-primary" id="wealth-submit-btn" style="padding: 10px; border-radius: 8px; font-weight: 600; width: 100%; margin-top: 6px;">Save Asset Holdings</button>
             </form>
         </div>
     </div>

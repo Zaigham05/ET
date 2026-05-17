@@ -219,6 +219,13 @@ class SpendWise {
         this.auditLog = JSON.parse(localStorage.getItem(prefix + 'auditLog')) || [];
         this.lastTransactionId = parseInt(localStorage.getItem(prefix + 'lastTransactionId')) || 0;
         this.goals = JSON.parse(localStorage.getItem(prefix + 'goals')) || [];
+        this.subscriptions = JSON.parse(localStorage.getItem(prefix + 'subscriptions')) || [];
+        this.assets = JSON.parse(localStorage.getItem(prefix + 'wealth_assets')) || [];
+        this.quests = JSON.parse(localStorage.getItem(prefix + 'quests_state')) || { envelopeMaster: false, saverKnight: false, frugalCount: 0 };
+        this.sharedWallets = JSON.parse(localStorage.getItem(prefix + 'shared_wallets')) || [];
+        this.sharedActivity = JSON.parse(localStorage.getItem(prefix + 'shared_activity')) || [
+            { id: 1, type: 'info', text: 'Welcome to Shared Wallets collaborative feed!', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+        ];
     }
 
     init() {
@@ -287,6 +294,11 @@ class SpendWise {
                     this.auditLog = cloudData.auditLog || [];
                     this.lastTransactionId = cloudData.lastTransactionId || this.transactions.length;
                     this.goals = cloudData.goals || [];
+                    this.subscriptions = cloudData.subscriptions || [];
+                    this.assets = cloudData.assets || [];
+                    this.quests = cloudData.quests || { envelopeMaster: false, saverKnight: false, frugalCount: 0 };
+                    this.sharedWallets = cloudData.sharedWallets || [];
+                    this.sharedActivity = cloudData.sharedActivity || [];
                     
                     this.reindexTransactions();
                     this.saveToLocal(true);
@@ -308,6 +320,11 @@ class SpendWise {
                 this.budget = data.budget || 0;
                 this.categories = data.categories || this.categories;
                 this.goals = data.goals || [];
+                this.subscriptions = data.subscriptions || [];
+                this.assets = data.assets || [];
+                this.quests = data.quests || { envelopeMaster: false, saverKnight: false, frugalCount: 0 };
+                this.sharedWallets = data.sharedWallets || [];
+                this.sharedActivity = data.sharedActivity || [];
                 this.updateUI();
                 this.saveToLocal(true);
             }
@@ -331,6 +348,11 @@ class SpendWise {
         localStorage.setItem(prefix + 'auditLog', JSON.stringify(this.auditLog));
         localStorage.setItem(prefix + 'lastTransactionId', this.lastTransactionId);
         localStorage.setItem(prefix + 'goals', JSON.stringify(this.goals));
+        localStorage.setItem(prefix + 'subscriptions', JSON.stringify(this.subscriptions || []));
+        localStorage.setItem(prefix + 'wealth_assets', JSON.stringify(this.assets || []));
+        localStorage.setItem(prefix + 'quests_state', JSON.stringify(this.quests || {}));
+        localStorage.setItem(prefix + 'shared_wallets', JSON.stringify(this.sharedWallets || []));
+        localStorage.setItem(prefix + 'shared_activity', JSON.stringify(this.sharedActivity || []));
         
         if (!isSyncFromCloud) {
             localStorage.setItem(prefix + 'lastLocalUpdate', Date.now());
@@ -359,6 +381,11 @@ class SpendWise {
             auditLog: this.auditLog,
             lastTransactionId: this.lastTransactionId,
             goals: this.goals,
+            subscriptions: this.subscriptions || [],
+            assets: this.assets || [],
+            quests: this.quests || {},
+            sharedWallets: this.sharedWallets || [],
+            sharedActivity: this.sharedActivity || [],
             lastUpdateId: this.clientId,
             timestamp: firebase.database.ServerValue.TIMESTAMP
         };
@@ -458,6 +485,51 @@ class SpendWise {
         this.efficiencyMsgEl = document.getElementById('efficiency-msg');
         this.debtPersonListEl = document.getElementById('debt-person-list');
         this.auditLogListEl = document.getElementById('audit-log-list');
+
+        // Phase 5 DOM Caching
+        this.navInsights = document.getElementById('nav-insights');
+        this.navRecurring = document.getElementById('nav-recurring');
+        this.viewInsights = document.getElementById('view-insights');
+        this.viewRecurring = document.getElementById('view-recurring');
+
+        // Phase 6, 7, 8 DOM Caching
+        this.navWealth = document.getElementById('nav-wealth');
+        this.navQuests = document.getElementById('nav-quests');
+        this.navShared = document.getElementById('nav-shared');
+        this.viewWealth = document.getElementById('view-wealth');
+        this.viewQuests = document.getElementById('view-quests');
+        this.viewShared = document.getElementById('view-shared');
+
+        this.addAssetBtn = document.getElementById('add-asset-btn');
+        this.wealthModal = document.getElementById('wealth-modal');
+        this.closeWealthModal = document.getElementById('close-wealth-modal');
+        this.wealthForm = document.getElementById('wealth-form');
+
+        this.sharedSplitForm = document.getElementById('shared-split-form');
+        this.sharedSplitLedger = document.getElementById('shared-split-ledger');
+        this.sharedActivityFeed = document.getElementById('shared-activity-feed');
+
+        this.subscriptionModal = document.getElementById('subscription-modal');
+        this.subscriptionForm = document.getElementById('subscription-form');
+        this.addSubscriptionBtn = document.getElementById('add-subscription-btn');
+        this.closeSubscriptionModal = document.getElementById('close-subscription-modal');
+        this.subCategorySelect = document.getElementById('sub-category');
+        this.browseSubIconsBtn = document.getElementById('browse-sub-icons-btn');
+
+        this.aiChatLog = document.getElementById('ai-chat-log');
+        this.aiChatForm = document.getElementById('ai-chat-form');
+        this.aiChatInput = document.getElementById('ai-chat-input');
+        this.affordabilityForm = document.getElementById('affordability-form');
+        this.affordabilityPrice = document.getElementById('affordability-price');
+        this.affordabilityResultBox = document.getElementById('affordability-result-box');
+        this.insightsAlertsContainer = document.getElementById('insights-alerts-container');
+
+        this.subscriptionsListContainer = document.getElementById('subscriptions-list-container');
+        this.recurringCalendarMonthName = document.getElementById('recurring-calendar-month-name');
+        this.recurringCalendarGrid = document.getElementById('recurring-calendar-grid');
+        this.subStatCount = document.getElementById('sub-stat-count');
+        this.subStatUnpaid = document.getElementById('sub-stat-unpaid');
+        this.subStatPaid = document.getElementById('sub-stat-paid');
         this.aiRecommendsListEl = document.getElementById('ai-recommends-list');
         
         this.isInitializing = true;
@@ -481,6 +553,14 @@ class SpendWise {
         this.dueDateGroup = document.getElementById('due-date-group');
         this.dueDateField = document.getElementById('due-date');
         this.personInput = document.getElementById('person');
+
+        // Forecast Elements Caching
+        this.forecastEndBalance = document.getElementById('forecast-end-balance');
+        this.forecastNetChange = document.getElementById('forecast-net-change');
+        this.forecastExhaustionLabel = document.getElementById('forecast-exhaustion-label');
+        this.forecastExhaustionPercent = document.getElementById('forecast-exhaustion-percent');
+        this.forecastExhaustionBar = document.getElementById('forecast-exhaustion-bar');
+        this.forecastAiTip = document.getElementById('forecast-ai-tip');
     }
 
     bindEvents() {
@@ -668,6 +748,79 @@ class SpendWise {
         if (goalAllocateForm) {
             goalAllocateForm.addEventListener('submit', (e) => this.handleGoalAllocate(e));
         }
+
+        // --- Phase 5 Event Bindings ---
+        if (this.aiChatForm) {
+            this.aiChatForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleAIChatSubmit();
+            });
+        }
+        
+        document.querySelectorAll('.prompt-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                const prompt = chip.getAttribute('data-prompt');
+                if (this.aiChatInput) this.aiChatInput.value = prompt;
+                this.handleAIChatSubmit();
+            });
+        });
+
+        if (this.affordabilityForm) {
+            this.affordabilityForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleAffordabilitySubmit();
+            });
+        }
+
+        // Subscriptions Management
+        if (this.addSubscriptionBtn) {
+            this.addSubscriptionBtn.addEventListener('click', () => {
+                this.editingSubscriptionId = null;
+                document.getElementById('subscription-modal-title').textContent = 'Add Recurring Bill';
+                document.getElementById('sub-submit-btn').textContent = 'Save Recurring Bill';
+                this.subscriptionForm.reset();
+                this.updateSubscriptionModalCategories();
+                this.toggleModal(this.subscriptionModal, true);
+            });
+        }
+
+        if (this.closeSubscriptionModal) {
+            this.closeSubscriptionModal.addEventListener('click', () => this.toggleModal(this.subscriptionModal, false));
+        }
+
+        if (this.subscriptionForm) {
+            this.subscriptionForm.addEventListener('submit', (e) => this.handleSubscriptionSubmit(e));
+        }
+
+        if (this.browseSubIconsBtn) {
+            this.browseSubIconsBtn.addEventListener('click', () => {
+                this.iconPickerTargetInputId = 'sub-icon';
+                this.toggleModal(document.getElementById('icon-picker-modal'), true);
+            });
+        }
+
+        // --- Phase 6 & 8 Event Bindings ---
+        if (this.addAssetBtn) {
+            this.addAssetBtn.addEventListener('click', () => {
+                this.editingAssetId = null;
+                document.getElementById('wealth-modal-title').textContent = 'Add Portfolio Asset';
+                document.getElementById('wealth-submit-btn').textContent = 'Save Asset Holdings';
+                this.wealthForm.reset();
+                this.toggleModal(this.wealthModal, true);
+            });
+        }
+
+        if (this.closeWealthModal) {
+            this.closeWealthModal.addEventListener('click', () => this.toggleModal(this.wealthModal, false));
+        }
+
+        if (this.wealthForm) {
+            this.wealthForm.addEventListener('submit', (e) => this.handleWealthSubmit(e));
+        }
+
+        if (this.sharedSplitForm) {
+            this.sharedSplitForm.addEventListener('submit', (e) => this.handleBillSplit(e));
+        }
     }
 
     updateSmartPersonSuggestions(type) {
@@ -775,17 +928,28 @@ class SpendWise {
         // Cash In Hand Calculation (Actual liquidity)
         // Cash = (Income + Borrow + Repay) - (Expense + Lend + Payback)
         const cashInHand = (totalIncome + totalBorrowed + totalRepaid) - (totalSpent + totalLent + totalPaidback);
+        this.cashInHand = cashInHand;
 
         const spentPercent = this.budget > 0 ? (totalSpent / this.budget) * 100 : 0;
 
         const totalGoalsSavings = (this.goals || []).reduce((sum, g) => sum + parseFloat(g.current || 0), 0);
-        const availableCash = cashInHand - totalGoalsSavings;
+        const totalUnpaidBills = (this.subscriptions || []).reduce((sum, sub) => {
+            const hasPaid = this.hasPaidSubscriptionThisMonth(sub.id);
+            return sum + (hasPaid ? 0 : parseFloat(sub.cost || 0));
+        }, 0);
+        const availableCash = cashInHand - totalGoalsSavings - totalUnpaidBills;
 
         // Display Stats
         if (this.cashInHandEl) this.cashInHandEl.textContent = this.formatCurrency(cashInHand);
         if (this.cashInHandSubtitleEl) {
-            if (totalGoalsSavings > 0) {
-                this.cashInHandSubtitleEl.textContent = `Available: ${this.formatCurrency(availableCash)} (excl. savings)`;
+            const hasDeductions = totalGoalsSavings > 0 || totalUnpaidBills > 0;
+            if (hasDeductions) {
+                let text = `Available: ${this.formatCurrency(availableCash)}`;
+                const parts = [];
+                if (totalGoalsSavings > 0) parts.push('savings');
+                if (totalUnpaidBills > 0) parts.push('bills');
+                text += ` (excl. ${parts.join(' & ')})`;
+                this.cashInHandSubtitleEl.textContent = text;
             } else {
                 this.cashInHandSubtitleEl.textContent = 'Current Liquidity';
             }
@@ -861,6 +1025,11 @@ class SpendWise {
             analytics: 'Financial Intelligence',
             debt: 'Debt Vault',
             goals: 'Goals Vault',
+            insights: 'AI Insights Vault',
+            recurring: 'Bills & Subscriptions Planner',
+            wealth: 'Wealth Hub & Portfolios',
+            quests: 'SpendWise Quests & Badges',
+            shared: 'Shared Wallets SPLIT',
             audit: 'Audit Vault',
             calendar: 'Calendar Vault',
             settings: 'System Settings'
@@ -871,6 +1040,11 @@ class SpendWise {
         if (viewName === 'categories') this.renderCategories();
         if (viewName === 'debt') this.renderDebtVault();
         if (viewName === 'goals') this.renderGoals();
+        if (viewName === 'insights') this.renderAIInsights();
+        if (viewName === 'recurring') this.renderRecurringPlanner();
+        if (viewName === 'wealth') this.renderWealthHub();
+        if (viewName === 'quests') this.renderQuests();
+        if (viewName === 'shared') this.renderSharedWallets();
         if (viewName === 'audit') this.renderAuditLog();
         if (viewName === 'calendar') this.renderCalendar();
     }
@@ -1379,6 +1553,69 @@ class SpendWise {
                 }
             }
         });
+
+        // Forecast Chart Initialization
+        const forecastCanvas = document.getElementById('forecastChart');
+        if (forecastCanvas) {
+            const forecastCtx = forecastCanvas.getContext('2d');
+            const forecastGradient = forecastCtx.createLinearGradient(0, 0, 0, 350);
+            forecastGradient.addColorStop(0, 'rgba(0, 229, 255, 0.25)');
+            forecastGradient.addColorStop(1, 'rgba(0, 229, 255, 0)');
+
+            this.forecastChart = new Chart(forecastCtx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({ length: 30 }, (_, i) => `Day ${i + 1}`),
+                    datasets: [
+                        {
+                            label: 'Projected Available Cash',
+                            data: [],
+                            borderColor: '#00e5ff',
+                            backgroundColor: forecastGradient,
+                            fill: true,
+                            tension: 0.35,
+                            borderWidth: 3,
+                            pointRadius: 2,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: '#00e5ff',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 1.5
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            padding: 12,
+                            titleFont: { size: 12, weight: '700' },
+                            bodyFont: { size: 12 },
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: (context) => {
+                                    const val = context.parsed.y;
+                                    return ` Projected Cash: ${this.formatCurrency(val)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false },
+                            ticks: { color: '#64748b', font: { size: 10 } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 0 }
+                        }
+                    }
+                }
+            });
+        }
     }
 
     updateCharts(data) {
@@ -1439,6 +1676,191 @@ class SpendWise {
 
         // 3. Extended Analytics (if in view)
         this.renderExtendedAnalytics(data);
+
+        // 4. AI Cash Flow Forecaster
+        this.calculateCashFlowForecast();
+    }
+
+    calculateCashFlowForecast() {
+        if (!this.forecastChart) return;
+
+        // 1. Get baseline starting balance (Cash in Hand today)
+        // Available Cash = Cash in Hand - Earmarked Savings - Subscription Reserves
+        let startingBalance = this.cashInHand;
+        
+        // Subtract earmarked savings
+        let earmarkedSavings = 0;
+        this.goals.forEach(g => {
+            earmarkedSavings += (g.current || 0);
+        });
+        
+        // Subtract upcoming subscription reserves
+        let upcomingSubscriptionReserves = 0;
+        const today = new Date();
+        const currentDay = today.getDate();
+        this.subscriptions.forEach(sub => {
+            const isPaid = sub.payments && sub.payments[today.toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })];
+            if (!isPaid && sub.dueDay >= currentDay) {
+                upcomingSubscriptionReserves += (sub.cost || 0);
+            }
+        });
+
+        const activeStartingCash = Math.max(0, startingBalance - earmarkedSavings - upcomingSubscriptionReserves);
+
+        // 2. Calculate daily spend velocity (based on current month's expenses)
+        const selectedPeriod = this.monthSelector.value;
+        const [monthName, year] = selectedPeriod.split(' ');
+        const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
+        const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+
+        // Get expenses in this month
+        const thisMonthExpenses = this.transactions.filter(t => {
+            const d = new Date(t.date);
+            return d.getMonth() === monthIndex && d.getFullYear() === parseInt(year) && t.type === 'Expense';
+        });
+        const totalExpenses = thisMonthExpenses.reduce((sum, t) => sum + t.amount, 0);
+        
+        // Calculate average daily spend pace (minimum 1 day elapsed)
+        const currentMonthToday = new Date();
+        let elapsedDays = currentMonthToday.getDate();
+        if (currentMonthToday.getMonth() !== monthIndex || currentMonthToday.getFullYear() !== parseInt(year)) {
+            elapsedDays = daysInMonth; // If viewing past month, assume full month elapsed
+        }
+        const dailySpendPace = totalExpenses / Math.max(1, elapsedDays);
+
+        // 3. Calculate daily income velocity (based on current month's income)
+        const thisMonthIncomes = this.transactions.filter(t => {
+            const d = new Date(t.date);
+            return d.getMonth() === monthIndex && d.getFullYear() === parseInt(year) && t.type === 'Income';
+        });
+        const totalIncomes = thisMonthIncomes.reduce((sum, t) => sum + t.amount, 0);
+        const dailyIncomePace = totalIncomes / Math.max(1, daysInMonth); // Income is typically monthly, so pace is distributed over full month
+
+        // 4. Gather subscription due days within the next 30 days
+        const dueSubscriptions = [];
+        for (let offset = 1; offset <= 30; offset++) {
+            const targetDate = new Date();
+            targetDate.setDate(today.getDate() + offset);
+            const targetDayOfMonth = targetDate.getDate();
+            const targetMonthStr = targetDate.toLocaleDateString('en-PK', { month: 'long', year: 'numeric' });
+
+            let subsDueThisDay = 0;
+            this.subscriptions.forEach(sub => {
+                const isPaid = sub.payments && sub.payments[targetMonthStr];
+                if (!isPaid && sub.dueDay === targetDayOfMonth) {
+                    subsDueThisDay += (sub.cost || 0);
+                }
+            });
+            dueSubscriptions.push(subsDueThisDay);
+        }
+
+        // 5. Daily projection loop for 30 days
+        const balances = [];
+        let currentBalance = activeStartingCash;
+        let minBalance = activeStartingCash;
+        let balanceDepletedDay = -1;
+
+        for (let day = 0; day < 30; day++) {
+            // Recalculate daily step
+            currentBalance = currentBalance + dailyIncomePace - dailySpendPace - dueSubscriptions[day];
+            currentBalance = Math.max(0, currentBalance); // Cash in hand cannot physically drop below 0 in vault ledger
+            balances.push(currentBalance);
+
+            if (currentBalance < minBalance) minBalance = currentBalance;
+            if (currentBalance <= 0 && balanceDepletedDay === -1 && activeStartingCash > 0) {
+                balanceDepletedDay = day + 1;
+            }
+        }
+
+        // 6. Update visual metrics in DOM
+        const endBalance = balances[29];
+        const netChange = endBalance - activeStartingCash;
+
+        if (this.forecastEndBalance) {
+            this.forecastEndBalance.textContent = this.formatCurrency(endBalance);
+        }
+
+        if (this.forecastNetChange) {
+            if (netChange >= 0) {
+                this.forecastNetChange.textContent = `+${this.formatCurrency(netChange)} forecast surplus`;
+                this.forecastNetChange.style.color = '#00ff88';
+            } else {
+                this.forecastNetChange.textContent = `-${this.formatCurrency(Math.abs(netChange))} projected deficit`;
+                this.forecastNetChange.style.color = '#ff4d6d';
+            }
+        }
+
+        // 7. Cash Exhaustion Index (Risk Rating)
+        let riskPercent = 0;
+        let riskLabel = 'Ultra Safe';
+        let riskColor = '#00ff88';
+
+        if (activeStartingCash === 0) {
+            riskPercent = 100;
+            riskLabel = 'Liquidity Empty';
+            riskColor = '#ff4d6d';
+        } else if (minBalance <= 0) {
+            riskPercent = 100;
+            riskLabel = 'High Depletion Risk';
+            riskColor = '#ff4d6d';
+        } else {
+            // Risk is inverse ratio of min balance to starting cash
+            riskPercent = Math.round((1 - (minBalance / activeStartingCash)) * 100);
+            if (riskPercent > 70) {
+                riskLabel = 'Warning Threshold';
+                riskColor = '#ffb300';
+            } else if (riskPercent > 35) {
+                riskLabel = 'Moderate Exposure';
+                riskColor = '#00b3ff';
+            }
+        }
+
+        if (this.forecastExhaustionLabel) {
+            this.forecastExhaustionLabel.textContent = riskLabel;
+            this.forecastExhaustionLabel.style.color = riskColor;
+        }
+        if (this.forecastExhaustionPercent) {
+            this.forecastExhaustionPercent.textContent = `${riskPercent}%`;
+        }
+        if (this.forecastExhaustionBar) {
+            this.forecastExhaustionBar.style.width = `${riskPercent}%`;
+            this.forecastExhaustionBar.style.background = `linear-gradient(90deg, ${riskColor}, #ff0055)`;
+        }
+
+        // 8. AI Tactical Advice compilation
+        let aiAdvice = 'Analyzing income distributions and spend paces...';
+        if (this.forecastAiTip) {
+            if (minBalance <= 0 || riskPercent >= 100) {
+                aiAdvice = `⚠️ <b>CRITICAL NOTICE:</b> At your current spend pace of ${this.formatCurrency(dailySpendPace)}/day, your available liquidity is projected to fully deplete on or before Day ${balanceDepletedDay > 0 ? balanceDepletedDay : '30'}. We recommend halting discretionary envelope allocations and subscription payments immediately to stabilize cash flow.`;
+            } else if (netChange < 0) {
+                aiAdvice = `📉 <b>LIQUIDITY CONTRACTING:</b> Spend velocity exceeds incoming capital pace by ${this.formatCurrency(Math.abs(dailyIncomePace - dailySpendPace))}/day. Your reserves are safe for now, but a buffer dip is projected. Consider cutting subscription overheads or delaying goals allocations.`;
+            } else {
+                aiAdvice = `🚀 <b>HIGH RETENTION STRENGTH:</b> Outstanding discipline! Your daily income allocation (${this.formatCurrency(dailyIncomePace)}) safely outpaces daily spend pace (${this.formatCurrency(dailySpendPace)}). You are projected to gain a surplus of ${this.formatCurrency(netChange)} over the next 30 days!`;
+            }
+            this.forecastAiTip.innerHTML = aiAdvice;
+        }
+
+        // 9. Update the forecast chart
+        this.renderForecastChart(balances);
+    }
+
+    renderForecastChart(balances) {
+        if (!this.forecastChart) return;
+        
+        // Dynamically adjust color gradient based on min projected balance
+        const minBal = Math.min(...balances);
+        const dataset = this.forecastChart.data.datasets[0];
+        
+        if (minBal <= 0) {
+            dataset.borderColor = '#ff4d6d';
+            dataset.shadowColor = 'rgba(255, 77, 109, 0.5)';
+        } else {
+            dataset.borderColor = '#00e5ff';
+            dataset.shadowColor = 'rgba(0, 229, 255, 0.5)';
+        }
+
+        this.forecastChart.data.datasets[0].data = balances;
+        this.forecastChart.update();
     }
 
     // --- Helper Methods ---
@@ -2818,7 +3240,1099 @@ class SpendWise {
             toast.classList.add('hiding');
             setTimeout(() => toast.remove(), 400);
         }, 3000);
+        setTimeout(() => {
+            toast.classList.add('hiding');
+            setTimeout(() => toast.remove(), 400);
+        }, 3000);
     }
+
+    // --- Phase 5: AI Insights Vault & Bills Planner Subscriptions Implementation ---
+
+    hasPaidSubscriptionThisMonth(subId) {
+        const sub = (this.subscriptions || []).find(s => s.id === subId);
+        if (!sub) return false;
+        
+        // Extract selected period
+        const selectedPeriod = this.monthSelector.value;
+        const [selMonth, selYear] = selectedPeriod.split(' ');
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const selMonthIdx = monthNames.indexOf(selMonth);
+        
+        return this.transactions.some(t => {
+            const tDate = new Date(t.date);
+            const matchesDate = tDate.getMonth() === selMonthIdx && tDate.getFullYear() === parseInt(selYear);
+            return matchesDate && t.type === 'Expense' && t.category === sub.category && t.note && t.note.includes(`[Bill: ${sub.name}]`);
+        });
+    }
+
+    paySubscription(subId) {
+        const sub = (this.subscriptions || []).find(s => s.id === subId);
+        if (!sub) return;
+
+        // Check if already paid
+        if (this.hasPaidSubscriptionThisMonth(subId)) {
+            this.showToast('This bill is already settled for this month.', 'info');
+            return;
+        }
+
+        const today = new Date();
+        const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(sub.dueDay).padStart(2, '0')}`;
+
+        this.lastTransactionId++;
+        const t = {
+            id: this.lastTransactionId,
+            type: 'Expense',
+            amount: parseFloat(sub.cost),
+            category: sub.category,
+            date: dateStr,
+            note: `[Bill: ${sub.name}] Subscription Payment`,
+            person: '',
+            dueDate: ''
+        };
+
+        this.transactions.unshift(t);
+        this.reindexTransactions();
+        
+        this.logAction('CREATE', `Transaction #${t.id}`, `Auto-settled bill: ${sub.name} of ${this.formatCurrency(sub.cost)}.`);
+        this.showToast(`Bill "${sub.name}" settled!`, 'success');
+
+        this.saveToLocal();
+        this.saveToCloud();
+        this.updateUI();
+        this.renderRecurringPlanner();
+    }
+
+    handleSubscriptionSubmit(e) {
+        e.preventDefault();
+        const name = document.getElementById('sub-name').value;
+        const cost = parseFloat(document.getElementById('sub-cost').value);
+        const dueDay = parseInt(document.getElementById('sub-due-day').value);
+        const category = document.getElementById('sub-category').value;
+        const icon = document.getElementById('sub-icon').value;
+
+        if (this.editingSubscriptionId) {
+            const subIndex = this.subscriptions.findIndex(s => s.id === this.editingSubscriptionId);
+            if (subIndex !== -1) {
+                this.subscriptions[subIndex] = {
+                    id: this.editingSubscriptionId,
+                    name,
+                    cost,
+                    dueDay,
+                    category,
+                    icon
+                };
+                this.logAction('EDIT', `Subscription: ${name}`, `Updated subscription details.`);
+                this.showToast('Subscription updated!', 'success');
+            }
+        } else {
+            const newSub = {
+                id: 'sub_' + Date.now(),
+                name,
+                cost,
+                dueDay,
+                category,
+                icon
+            };
+            this.subscriptions.push(newSub);
+            this.logAction('CREATE', `Subscription: ${name}`, `Created subscription for ${this.formatCurrency(cost)} due on day ${dueDay}.`);
+            this.showToast('Subscription added!', 'success');
+        }
+
+        this.toggleModal(this.subscriptionModal, false);
+        this.saveToLocal();
+        this.saveToCloud();
+        this.updateUI();
+        this.renderRecurringPlanner();
+    }
+
+    editSubscription(id) {
+        const sub = this.subscriptions.find(s => s.id === id);
+        if (!sub) return;
+
+        this.editingSubscriptionId = id;
+        document.getElementById('subscription-modal-title').textContent = 'Edit Recurring Bill';
+        document.getElementById('sub-submit-btn').textContent = 'Save Changes';
+        
+        document.getElementById('sub-name').value = sub.name;
+        document.getElementById('sub-cost').value = sub.cost;
+        document.getElementById('sub-due-day').value = sub.dueDay;
+        this.updateSubscriptionModalCategories();
+        document.getElementById('sub-category').value = sub.category;
+        document.getElementById('sub-icon').value = sub.icon;
+
+        this.toggleModal(this.subscriptionModal, true);
+    }
+
+    deleteSubscription(id) {
+        const sub = this.subscriptions.find(s => s.id === id);
+        if (!sub) return;
+
+        this.confirmDialog(`Are you sure you want to remove the subscription "${sub.name}"?`, 'trash-2').then(ok => {
+            if (ok) {
+                this.subscriptions = this.subscriptions.filter(s => s.id !== id);
+                this.logAction('DELETE', `Subscription: ${sub.name}`, `Removed subscription.`);
+                this.showToast('Subscription deleted.', 'info');
+                
+                this.saveToLocal();
+                this.saveToCloud();
+                this.updateUI();
+                this.renderRecurringPlanner();
+            }
+        });
+    }
+
+    updateSubscriptionModalCategories() {
+        if (!this.subCategorySelect) return;
+        this.subCategorySelect.innerHTML = '';
+        Object.keys(this.categories).forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat;
+            opt.textContent = cat;
+            this.subCategorySelect.appendChild(opt);
+        });
+    }
+
+    renderRecurringPlanner() {
+        if (!this.subscriptionsListContainer) return;
+        
+        // 1. Render Summary stats
+        let totalUnpaid = 0;
+        let totalPaid = 0;
+        
+        this.subscriptionsListContainer.innerHTML = '';
+        
+        if (this.subscriptions.length === 0) {
+            this.subscriptionsListContainer.innerHTML = `
+                <div class="text-muted" style="text-align: center; padding: 2rem;">
+                    <i data-lucide="repeat" style="width: 32px; height: 32px; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+                    <p>No active subscriptions tracked. Add one to get started!</p>
+                </div>
+            `;
+        } else {
+            this.subscriptions.forEach(sub => {
+                const isPaid = this.hasPaidSubscriptionThisMonth(sub.id);
+                if (isPaid) {
+                    totalPaid += parseFloat(sub.cost);
+                } else {
+                    totalUnpaid += parseFloat(sub.cost);
+                }
+                
+                const card = document.createElement('div');
+                card.className = 'subscription-card';
+                card.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div class="subscription-icon-wrapper">
+                            <i data-lucide="${sub.icon || 'repeat'}"></i>
+                        </div>
+                        <div>
+                            <h4 style="color: var(--text-main); font-weight: 600; font-size: 0.95rem; margin-bottom: 2px;">${sub.name}</h4>
+                            <div style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem;">
+                                <span class="text-muted">${sub.category}</span>
+                                <span style="width: 3px; height: 3px; border-radius: 50%; background: var(--text-muted);"></span>
+                                <span class="text-muted">Due Day: ${sub.dueDay}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="text-align: right;">
+                            <div style="color: var(--text-main); font-weight: 700; font-size: 0.95rem; margin-bottom: 2px;">${this.formatCurrency(sub.cost)}</div>
+                            <span class="sub-status-badge ${isPaid ? 'paid' : 'unpaid'}">${isPaid ? 'Paid' : 'Unpaid'}</span>
+                        </div>
+                        <div style="display: flex; gap: 6px;">
+                            ${!isPaid ? `
+                                <button class="btn-primary pay-bill-btn" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; font-weight: 600; background: linear-gradient(135deg, #00ff88, #00b3ff);" onclick="window.app.paySubscription('${sub.id}')">
+                                    Pay Now
+                                </button>
+                            ` : ''}
+                            <button class="action-btn" style="width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);" onclick="window.app.editSubscription('${sub.id}')">
+                                <i data-lucide="edit-2" style="width: 12px; height: 12px;"></i>
+                            </button>
+                            <button class="action-btn delete" style="width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); color: var(--secondary);" onclick="window.app.deleteSubscription('${sub.id}')">
+                                <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                this.subscriptionsListContainer.appendChild(card);
+            });
+        }
+        
+        // 2. Update stats cards
+        if (this.subStatCount) this.subStatCount.textContent = this.subscriptions.length;
+        if (this.subStatUnpaid) this.subStatUnpaid.textContent = this.formatCurrency(totalUnpaid);
+        if (this.subStatPaid) this.subStatPaid.textContent = this.formatCurrency(totalPaid);
+        
+        // 3. Render Calendar
+        if (this.recurringCalendarGrid) {
+            this.recurringCalendarMonthName.textContent = this.monthSelector.value;
+            this.recurringCalendarGrid.innerHTML = '';
+            
+            for (let day = 1; day <= 28; day++) {
+                const dayBox = document.createElement('div');
+                dayBox.className = 'calendar-day-box';
+                
+                const today = new Date();
+                if (today.getDate() === day) {
+                    dayBox.classList.add('today');
+                }
+                
+                const daySubs = this.subscriptions.filter(s => parseInt(s.dueDay) === day);
+                if (daySubs.length > 0) {
+                    dayBox.classList.add('has-bill');
+                    dayBox.setAttribute('title', daySubs.map(s => `${s.name}: ${this.formatCurrency(s.cost)}`).join(', '));
+                    
+                    const dot = document.createElement('div');
+                    dot.className = 'calendar-bill-dot';
+                    dayBox.appendChild(dot);
+                }
+                
+                const numLabel = document.createElement('span');
+                numLabel.textContent = day;
+                dayBox.appendChild(numLabel);
+                
+                this.recurringCalendarGrid.appendChild(dayBox);
+            }
+        }
+        
+        if (window.lucide) lucide.createIcons();
+    }
+
+    renderAIInsights() {
+        if (!this.insightsAlertsContainer) return;
+        
+        // 1. Generate Spend Velocity warnings
+        const alerts = this.generateAIInsights();
+        this.insightsAlertsContainer.innerHTML = '';
+        
+        if (alerts.length === 0) {
+            this.insightsAlertsContainer.innerHTML = `
+                <div class="velocity-alert-card" style="border-left-color: #00ff88;">
+                    <i data-lucide="check-circle" style="color: #00ff88; width: 16px; height: 16px; flex-shrink: 0;"></i>
+                    <div>
+                        <div style="font-weight: 600;">All Budgets Safe</div>
+                        <p class="text-muted" style="font-size: 0.75rem; margin-top: 2px;">Your envelope spend velocity is completely within bounds. Keep it up!</p>
+                    </div>
+                </div>
+            `;
+        } else {
+            alerts.forEach(alert => {
+                const card = document.createElement('div');
+                card.className = `velocity-alert-card ${alert.level}`;
+                card.innerHTML = `
+                    <i data-lucide="alert-triangle" style="color: ${alert.level === 'danger' ? 'var(--secondary)' : '#ffb300'}; width: 16px; height: 16px; flex-shrink: 0;"></i>
+                    <div>
+                        <div style="font-weight: 600;">${alert.title}</div>
+                        <p class="text-muted" style="font-size: 0.75rem; margin-top: 2px;">${alert.msg}</p>
+                    </div>
+                `;
+                this.insightsAlertsContainer.appendChild(card);
+            });
+        }
+        
+        if (window.lucide) lucide.createIcons();
+    }
+
+    handleAIChatSubmit() {
+        if (!this.aiChatInput || !this.aiChatLog) return;
+        const msg = this.aiChatInput.value.trim();
+        if (!msg) return;
+
+        // Clear input
+        this.aiChatInput.value = '';
+
+        // Append User bubble
+        const userBubble = document.createElement('div');
+        userBubble.className = 'ai-bubble outgoing';
+        userBubble.textContent = msg;
+        this.aiChatLog.appendChild(userBubble);
+        this.aiChatLog.scrollTop = this.aiChatLog.scrollHeight;
+
+        // Simulate thinking & respond
+        setTimeout(() => {
+            const reply = this.getAIAdvisorResponse(msg);
+            const aiBubble = document.createElement('div');
+            aiBubble.className = 'ai-bubble incoming';
+            aiBubble.innerHTML = reply;
+            this.aiChatLog.appendChild(aiBubble);
+            this.aiChatLog.scrollTop = this.aiChatLog.scrollHeight;
+            if (window.lucide) lucide.createIcons();
+        }, 500);
+    }
+
+    getAIAdvisorResponse(prompt) {
+        const p = prompt.toLowerCase();
+        
+        // Compile quick metrics
+        const monthlyData = this.getFilteredTransactions(true);
+        const totalIncome = monthlyData.filter(t => t.type === 'Income').reduce((s, t) => s + t.amount, 0);
+        const totalSpent = monthlyData.filter(t => t.type === 'Expense').reduce((s, t) => s + t.amount, 0);
+        const totalGoalsSavings = (this.goals || []).reduce((sum, g) => sum + parseFloat(g.current || 0), 0);
+        const unpaidSubTotal = (this.subscriptions || []).reduce((sum, sub) => {
+            return sum + (this.hasPaidSubscriptionThisMonth(sub.id) ? 0 : parseFloat(sub.cost || 0));
+        }, 0);
+        
+        if (p.includes('monthly') || p.includes('summary') || p.includes('trend')) {
+            const savingsRatio = totalIncome > 0 ? ((totalIncome - totalSpent) / totalIncome) * 100 : 0;
+            return `
+                <div style="font-weight: 700; margin-bottom: 6px;">📈 Monthly Financial Summary</div>
+                <ul style="padding-left: 15px; font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px;">
+                    <li><strong>Total Cash flow:</strong> Income of ${this.formatCurrency(totalIncome)} against Spends of ${this.formatCurrency(totalSpent)}.</li>
+                    <li><strong>Earmarked reserves:</strong> Earmarked goals savings are ${this.formatCurrency(totalGoalsSavings)}. Unpaid recurring bills total ${this.formatCurrency(unpaidSubTotal)}.</li>
+                    <li><strong>Liquidity Health:</strong> You are currently saving <strong>${savingsRatio.toFixed(1)}%</strong> of your gross monthly cash inflow.</li>
+                </ul>
+            `;
+        }
+        
+        if (p.includes('velocity') || p.includes('envelope') || p.includes('budget')) {
+            const alerts = this.generateAIInsights();
+            if (alerts.length === 0) {
+                return `
+                    <div style="font-weight: 700; margin-bottom: 6px;">✅ Budget Envelope Velocity</div>
+                    <p style="font-size: 0.85rem;">All your envelope limits are in outstanding shape! There are no high velocity category warnings logged for the current billing cycle.</p>
+                `;
+            }
+            const items = alerts.map(a => `<li><strong>${a.title}:</strong> ${a.msg}</li>`).join('');
+            return `
+                <div style="font-weight: 700; margin-bottom: 6px;">⚠️ Envelope Spend Warning</div>
+                <ul style="padding-left: 15px; font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px;">
+                    ${items}
+                </ul>
+            `;
+        }
+
+        if (p.includes('save') || p.includes('strategy')) {
+            const highSpendCategory = Object.keys(this.categories).map(catName => {
+                const total = monthlyData.filter(t => t.type === 'Expense' && t.category === catName).reduce((s, t) => s + t.amount, 0);
+                return { name: catName, total };
+            }).sort((a, b) => b.total - a.total)[0];
+            
+            let tip = "Try setting aside 10% of every income directly into Goals Vault as a first step.";
+            if (highSpendCategory && highSpendCategory.total > 0) {
+                tip = `Your largest spend this month is in <strong>${highSpendCategory.name}</strong> (${this.formatCurrency(highSpendCategory.total)}). Reducing this specific category by 15% would free up liquid cash!`;
+            }
+            return `
+                <div style="font-weight: 700; margin-bottom: 6px;">💡 Custom Savings Advisor Tip</div>
+                <p style="font-size: 0.85rem; line-height: 1.4;">${tip}</p>
+            `;
+        }
+
+        return `
+            <div style="font-weight: 700; margin-bottom: 6px;">🤖 AI Advisor Desk</div>
+            <p style="font-size: 0.85rem; line-height: 1.4;">I've scanned your financial profile! Ask me:
+            <br>• "🔍 Monthly Summary" to review gross trends.
+            <br>• "📊 Budget Velocities" to search for fast spends.
+            <br>• "💡 Saving Strategies" to get custom frugality suggestions.</p>
+        `;
+    }
+
+    handleAffordabilitySubmit() {
+        if (!this.affordabilityPrice || !this.affordabilityResultBox) return;
+        const val = parseFloat(this.affordabilityPrice.value);
+        if (isNaN(val) || val <= 0) return;
+
+        if (!this.quests) this.quests = { envelopeMaster: false, saverKnight: false, billDestroyer: false, frugalCount: 0 };
+        if (!this.quests.frugalCount) this.quests.frugalCount = 0;
+        this.quests.frugalCount++;
+        this.saveToLocal();
+        this.saveToCloud();
+
+        const result = this.evaluateAffordability(val);
+        
+        this.affordabilityResultBox.style.display = 'block';
+        this.affordabilityResultBox.className = `glass ${result.status}`;
+        this.affordabilityResultBox.style.borderLeft = `4px solid ${result.color}`;
+        this.affordabilityResultBox.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span style="font-weight: 700; text-transform: uppercase; font-size: 0.8rem; color: ${result.color};">${result.statusLabel}</span>
+                <span style="font-weight: 700; font-size: 1rem; color: var(--text-main);">${this.formatCurrency(val)}</span>
+            </div>
+            <p style="font-size: 0.8rem; line-height: 1.4; color: var(--text-muted);">${result.message}</p>
+        `;
+    }
+
+    evaluateAffordability(price) {
+        // Compute cash available
+        const monthlyData = this.getFilteredTransactions(true);
+        const totalIncome = monthlyData.filter(t => t.type === 'Income').reduce((s, t) => s + t.amount, 0);
+        const totalSpent = monthlyData.filter(t => t.type === 'Expense').reduce((s, t) => s + t.amount, 0);
+        const cashInHand = (totalIncome - totalSpent); // Current liquid net flow
+        const totalGoalsSavings = (this.goals || []).reduce((sum, g) => sum + parseFloat(g.current || 0), 0);
+        const unpaidBills = (this.subscriptions || []).reduce((sum, s) => sum + (this.hasPaidSubscriptionThisMonth(s.id) ? 0 : parseFloat(s.cost)), 0);
+        
+        const availableLiquidity = cashInHand - totalGoalsSavings - unpaidBills;
+        
+        if (price > availableLiquidity) {
+            return {
+                status: 'unsafe',
+                statusLabel: '⚠️ Fails Liquidity Bounds',
+                color: 'var(--secondary)',
+                message: `This purchase of <strong>${this.formatCurrency(price)}</strong> exceeds your actual available cash of <strong>${this.formatCurrency(availableLiquidity)}</strong> (excluding your earmarked savings goals and unpaid monthly bills). We strongly recommend deferring this purchase!`
+            };
+        }
+        
+        // Evaluate ratio against average monthly income
+        const ratio = totalIncome > 0 ? (price / totalIncome) * 100 : 100;
+        if (ratio > 50) {
+            return {
+                status: 'warning',
+                statusLabel: '⚡ Frugality Warning',
+                color: '#ffb300',
+                message: `You have the liquid funds, but this planned purchase consumes <strong>${ratio.toFixed(0)}%</strong> of your gross monthly income! Buying this might severely strain your liquidity for the rest of the billing cycle.`
+            };
+        }
+        
+        // Green
+        let goalsTip = "";
+        const targetGoal = (this.goals || []).find(g => parseFloat(g.current) < parseFloat(g.target));
+        if (targetGoal) {
+            const potentialCompletion = ((parseFloat(targetGoal.current) + price) / parseFloat(targetGoal.target)) * 100;
+            goalsTip = `<br><br>💡 <em>Frugal Tip: Depositing this amount into your active goal <strong>"${targetGoal.title}"</strong> instead would jump its target completion progress to <strong>${Math.min(100, potentialCompletion).toFixed(0)}%</strong>!</em>`;
+        }
+        
+        return {
+            status: 'safe',
+            statusLabel: '✅ Affordability Verified',
+            color: '#00ff88',
+            message: `This purchase of <strong>${this.formatCurrency(price)}</strong> consumes only <strong>${ratio.toFixed(1)}%</strong> of your monthly cash flow, leaving ample reserves. You are completely safe to purchase!${goalsTip}`
+        };
+    }
+
+    generateAIInsights() {
+        const alerts = [];
+        const today = new Date();
+        const currentDay = today.getDate();
+        const totalDaysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+        const elapsedRatio = currentDay / totalDaysInMonth; // percentage of month elapsed
+        
+        const monthlyData = this.getFilteredTransactions(true);
+        
+        Object.keys(this.categories).forEach(catName => {
+            const cat = this.categories[catName];
+            const limit = parseFloat(cat.budget || 0);
+            if (limit <= 0) return;
+            
+            const spent = monthlyData.filter(t => t.type === 'Expense' && t.category === catName).reduce((sum, t) => sum + t.amount, 0);
+            const spentRatio = spent / limit;
+            
+            // Spend velocity warning: spent ratio is 20% higher than temporal elapsed ratio
+            if (spentRatio > elapsedRatio + 0.20 && spentRatio < 1.0) {
+                alerts.push({
+                    level: 'warning',
+                    title: `${catName} Limit Warning`,
+                    msg: `You have spent <strong>${(spentRatio * 100).toFixed(0)}%</strong> of your envelope limit in only <strong>${currentDay} days</strong> of the month. Slow down your purchases!`
+                });
+            } else if (spentRatio >= 1.0) {
+                alerts.push({
+                    level: 'danger',
+                    title: `${catName} Limit Exceeded`,
+                    msg: `You have fully exhausted your <strong>${this.formatCurrency(limit)}</strong> envelope limit for this month!`
+                });
+            }
+        });
+        
+        return alerts;
+    }
+
+    // ==========================================
+    // Phase 6: Wealth Hub Core Business Logic
+    // ==========================================
+
+    renderWealthHub() {
+        const tbody = document.getElementById('wealth-ledger-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        let investedTotal = 0;
+        let currentTotal = 0;
+        const typeVals = { Stocks: 0, Crypto: 0, Gold: 0, 'Real Estate': 0 };
+
+        (this.assets || []).forEach(asset => {
+            const costVal = parseFloat(asset.qty) * parseFloat(asset.buyPrice);
+            const currentVal = parseFloat(asset.qty) * parseFloat(asset.currentPrice);
+            investedTotal += costVal;
+            currentTotal += currentVal;
+
+            if (typeVals[asset.type] !== undefined) {
+                typeVals[asset.type] += currentVal;
+            }
+
+            const yieldVal = currentVal - costVal;
+            const yieldPct = costVal > 0 ? (yieldVal / costVal) * 100 : 0;
+            const yieldClass = yieldVal >= 0 ? 'text-success' : 'text-danger';
+            const yieldSign = yieldVal >= 0 ? '+' : '';
+
+            const row = document.createElement('tr');
+            row.style.borderBottom = '1px solid var(--glass-border)';
+            row.innerHTML = `
+                <td style="padding: 12px 8px; font-weight: 600; color: var(--text-main);">${asset.name}</td>
+                <td style="padding: 12px 8px;"><span class="asset-badge ${asset.type.toLowerCase().replace(' ', '')}">${asset.type}</span></td>
+                <td style="padding: 12px 8px; color: var(--text-muted);">${asset.qty}</td>
+                <td style="padding: 12px 8px; color: var(--text-muted);">${this.formatCurrency(asset.buyPrice)}</td>
+                <td style="padding: 12px 8px; color: var(--text-muted);">${this.formatCurrency(asset.currentPrice)}</td>
+                <td style="padding: 12px 8px; color: var(--text-muted);">${this.formatCurrency(costVal)}</td>
+                <td style="padding: 12px 8px; font-weight: 600; color: var(--text-main);">${this.formatCurrency(currentVal)}</td>
+                <td style="padding: 12px 8px; text-align: right; font-weight: 600;" class="${yieldClass}">${yieldSign}${this.formatCurrency(yieldVal)} (${yieldSign}${yieldPct.toFixed(2)}%)</td>
+                <td style="padding: 12px 8px; text-align: right;">
+                    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                        <button class="btn-secondary" onclick="window.app.editAsset('${asset.id}')" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px;"><i data-lucide="edit-2" style="width: 12px; height: 12px;"></i></button>
+                        <button class="btn-secondary" onclick="window.app.deleteAsset('${asset.id}')" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; color: #ff4d6d;"><i data-lucide="trash-2" style="width: 12px; height: 12px;"></i></button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        if ((this.assets || []).length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                        <i data-lucide="pie-chart" style="width: 40px; height: 40px; margin-bottom: 0.5rem; opacity: 0.4;"></i>
+                        <p>No investment assets recorded yet. Click "+ Add Asset" to begin tracking your net worth!</p>
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Net worth calculation
+        const monthlyData = this.getFilteredTransactions(true);
+        const totalIncome = monthlyData.filter(t => t.type === 'Income').reduce((s, t) => s + t.amount, 0);
+        const totalSpent = monthlyData.filter(t => t.type === 'Expense').reduce((s, t) => s + t.amount, 0);
+        const cashInHand = (totalIncome - totalSpent);
+        const grossNetWorth = cashInHand + currentTotal;
+
+        const totalYield = currentTotal - investedTotal;
+        const totalYieldPct = investedTotal > 0 ? (totalYield / investedTotal) * 100 : 0;
+
+        // Render wealth metrics
+        document.getElementById('wealth-net-worth').textContent = this.formatCurrency(grossNetWorth);
+        document.getElementById('wealth-invested').textContent = this.formatCurrency(investedTotal);
+        document.getElementById('wealth-current-val').textContent = this.formatCurrency(currentTotal);
+        document.getElementById('wealth-asset-count').textContent = `${(this.assets || []).length} Assets`;
+
+        const returnEl = document.getElementById('wealth-total-return');
+        if (returnEl) {
+            const sign = totalYield >= 0 ? '+' : '';
+            returnEl.textContent = `${sign}${totalYieldPct.toFixed(2)}% Net Yield (${sign}${this.formatCurrency(totalYield)})`;
+            returnEl.className = `stat-trend ${totalYield >= 0 ? 'positive' : 'negative'}`;
+        }
+
+        // SVG allocation wheel math
+        const totalVal = currentTotal;
+        let cumulative = 0;
+        ['Stocks', 'Crypto', 'Gold', 'Real Estate'].forEach(type => {
+            const pct = totalVal > 0 ? (typeVals[type] / totalVal) * 100 : 0;
+            const el = document.getElementById('allocation-' + type.toLowerCase().replace(' ', ''));
+            const textEl = document.getElementById(`ratio-${type.toLowerCase().replace(' ', '')}-pct`);
+            
+            if (textEl) textEl.textContent = pct.toFixed(0) + '%';
+            if (el) {
+                el.setAttribute('stroke-dasharray', `${pct} 100`);
+                el.setAttribute('stroke-dashoffset', `${-cumulative}`);
+                cumulative += pct;
+            }
+        });
+
+        const totalRatioEl = document.getElementById('allocation-total-ratio');
+        if (totalRatioEl) totalRatioEl.textContent = totalVal > 0 ? '100%' : '0%';
+
+        // Generate custom advisor recommendation
+        const adviceBox = document.getElementById('wealth-advice-box');
+        const adviceText = document.getElementById('wealth-advice-text');
+        if (adviceBox && adviceText) {
+            if (totalVal <= 0) {
+                adviceBox.style.borderLeftColor = '#eab308';
+                adviceText.innerHTML = "Add your holdings using the <strong>\"+ Add Asset\"</strong> button to run the analytical scan.";
+            } else {
+                const stocksPct = (typeVals['Stocks'] / totalVal) * 100;
+                const cryptoPct = (typeVals['Crypto'] / totalVal) * 100;
+                const goldPct = (typeVals['Gold'] / totalVal) * 100;
+                const realestatePct = (typeVals['Real Estate'] / totalVal) * 100;
+
+                if (cryptoPct > 30) {
+                    adviceBox.style.borderLeftColor = '#ff4d6d';
+                    adviceText.innerHTML = "⚠️ <strong>High Crypto Concentration:</strong> Your cryptocurrency holdings comprise <strong>" + cryptoPct.toFixed(0) + "%</strong> of your wealth. Consider taking profits and allocating to stocks or gold to manage systemic volatility risk.";
+                } else if (goldPct < 5) {
+                    adviceBox.style.borderLeftColor = '#eab308';
+                    adviceText.innerHTML = "💡 <strong>Low Gold Reserves:</strong> Gold forms only <strong>" + goldPct.toFixed(0) + "%</strong> of your portfolios. Precious metals act as standard recession hedges; consider boosting gold to <strong>10%</strong>.";
+                } else {
+                    adviceBox.style.borderLeftColor = '#00ff88';
+                    adviceText.innerHTML = "🏆 <strong>Perfect Diversification:</strong> Your portfolio asset distribution is exceptionally balanced, providing resilient risk coverage against sudden segment market corrections!";
+                }
+            }
+        }
+
+        // Re-trigger Lucide icons to render actions icons beautifully
+        if (window.lucide) window.lucide.createIcons();
+    }
+
+    handleWealthSubmit(e) {
+        e.preventDefault();
+        const name = document.getElementById('wealth-name').value;
+        const type = document.getElementById('wealth-type').value;
+        const qty = parseFloat(document.getElementById('wealth-qty').value);
+        const buyPrice = parseFloat(document.getElementById('wealth-buy-price').value);
+        const currentPrice = parseFloat(document.getElementById('wealth-current-price').value);
+
+        if (this.editingAssetId) {
+            const assetIndex = this.assets.findIndex(a => a.id === this.editingAssetId);
+            if (assetIndex !== -1) {
+                this.assets[assetIndex] = { id: this.editingAssetId, name, type, qty, buyPrice, currentPrice };
+                this.logAction('EDIT', `Asset: ${name}`, `Updated holding to ${qty} units.`);
+                this.showToast(`Holding "${name}" updated!`, 'success');
+            }
+        } else {
+            const newAsset = {
+                id: 'asset_' + Date.now(),
+                name,
+                type,
+                qty,
+                buyPrice,
+                currentPrice
+            };
+            this.assets.push(newAsset);
+            this.logAction('CREATE', `Asset: ${name}`, `Added new portfolio asset holdings.`);
+            this.showToast(`Asset "${name}" successfully tracked!`, 'success');
+        }
+
+        this.toggleModal(this.wealthModal, false);
+        this.saveToLocal();
+        this.saveToCloud();
+        this.renderWealthHub();
+    }
+
+    editAsset(id) {
+        const asset = this.assets.find(a => a.id === id);
+        if (!asset) return;
+
+        this.editingAssetId = id;
+        document.getElementById('wealth-modal-title').textContent = 'Edit Holdings Details';
+        document.getElementById('wealth-submit-btn').textContent = 'Update Holdings';
+
+        document.getElementById('wealth-name').value = asset.name;
+        document.getElementById('wealth-type').value = asset.type;
+        document.getElementById('wealth-qty').value = asset.qty;
+        document.getElementById('wealth-buy-price').value = asset.buyPrice;
+        document.getElementById('wealth-current-price').value = asset.currentPrice;
+
+        this.toggleModal(this.wealthModal, true);
+    }
+
+    deleteAsset(id) {
+        const asset = this.assets.find(a => a.id === id);
+        if (!asset) return;
+
+        this.confirmDialog(`Remove all holdings tracking of "${asset.name}" from your portfolio?`, 'trash-2').then(ok => {
+            if (ok) {
+                this.assets = this.assets.filter(a => a.id !== id);
+                this.logAction('DELETE', `Asset: ${asset.name}`, `Holding deleted from wealth portfolio ledger.`);
+                this.showToast('Asset holdings deleted.', 'info');
+                
+                this.saveToLocal();
+                this.saveToCloud();
+                this.renderWealthHub();
+            }
+        });
+    }
+
+    // ==========================================
+    // Phase 7: SpendWise Quests & Gamification
+    // ==========================================
+
+    calculateFinancialHealthScore() {
+        const monthlyData = this.getFilteredTransactions(true);
+        const monthlyIncome = monthlyData.filter(t => t.type === 'Income').reduce((s, t) => s + t.amount, 0);
+        const monthlyExpenses = monthlyData.filter(t => t.type === 'Expense').reduce((s, t) => s + t.amount, 0);
+        const monthlySavings = monthlyIncome - monthlyExpenses;
+
+        // 1. Savings Ratio Score (40 Points Max)
+        let savingsScore = 0;
+        if (monthlyIncome > 0 && monthlySavings > 0) {
+            const savingsRatio = monthlySavings / monthlyIncome;
+            savingsScore = Math.min(40, savingsRatio * 133); // 30% savings rate yields a perfect 40 score
+        }
+
+        // 2. Envelope Budget Violations (30 Points Max)
+        let budgetDisciplineScore = 30;
+        let violationsCount = 0;
+        Object.keys(this.categories).forEach(catName => {
+            const cat = this.categories[catName];
+            const limit = parseFloat(cat.budget || 0);
+            if (limit > 0) {
+                const spent = monthlyData.filter(t => t.type === 'Expense' && t.category === catName).reduce((sum, t) => sum + t.amount, 0);
+                if (spent > limit) violationsCount++;
+            }
+        });
+        budgetDisciplineScore = Math.max(0, 30 - (violationsCount * 10));
+
+        // 3. Liquidity Safety Score (20 Points Max)
+        let liquidityScore = 0;
+        const totalGoalsSavings = (this.goals || []).reduce((sum, g) => sum + parseFloat(g.current || 0), 0);
+        const upcomingUnpaidSubs = (this.subscriptions || []).reduce((sum, s) => sum + parseFloat(s.cost || 0), 0);
+        const availableCash = cashInHand => cashInHand - totalGoalsSavings - upcomingUnpaidSubs;
+        
+        const grossCash = monthlyIncome - monthlyExpenses;
+        const netLiquidity = availableCash(grossCash);
+        if (netLiquidity > 0) {
+            liquidityScore = Math.min(20, (netLiquidity / Math.max(1, monthlyExpenses)) * 20);
+        }
+
+        // 4. Debt Ratio Score (10 Points Max)
+        let debtScore = 10;
+        const debtTotal = (this.transactions || []).filter(t => t.category === 'Debt').reduce((sum, t) => sum + t.amount, 0);
+        if (debtTotal > 0) {
+            debtScore = Math.max(0, 10 - (debtTotal / Math.max(1, monthlyIncome)) * 5);
+        }
+
+        const totalScore = Math.round(savingsScore + budgetDisciplineScore + liquidityScore + debtScore);
+        return Math.max(10, Math.min(100, totalScore));
+    }
+
+    renderQuests() {
+        const score = this.calculateFinancialHealthScore();
+        
+        // Render central score gauge
+        const scoreValEl = document.getElementById('health-score-value');
+        const scoreGradeEl = document.getElementById('health-score-grade');
+        const scoreFillEl = document.getElementById('health-score-fill');
+        const scoreSubEl = document.getElementById('health-score-sub');
+
+        if (scoreValEl) scoreValEl.textContent = score;
+        if (scoreFillEl) {
+            scoreFillEl.setAttribute('stroke-dasharray', `${score} 100`);
+        }
+
+        let grade = "Evaluating";
+        let subMsg = "Keep updating your budgets and logs to calculate your real-time score.";
+        let shadowColor = "rgba(0, 229, 255, 0.3)";
+
+        if (score >= 85) {
+            grade = "Excellent";
+            subMsg = "🏆 Wealth Master! Your saving rate is premium, available cash is secured, and envelopes are pristine!";
+            shadowColor = "rgba(0, 255, 136, 0.4)";
+        } else if (score >= 70) {
+            grade = "Healthy";
+            subMsg = "👍 Saver Champion! Your assets are growing nicely and monthly allocations remain in the green.";
+            shadowColor = "rgba(168, 85, 247, 0.3)";
+        } else if (score >= 50) {
+            grade = "Strained";
+            subMsg = "⚠️ Budget Scout. Some of your envelopes are over-utilizing limits. Trim down secondary expenses.";
+            shadowColor = "rgba(234, 179, 8, 0.3)";
+        } else {
+            grade = "Critical";
+            subMsg = "🚨 Crisis Alert! Expenses exceed monthly cash flows. Leverage the AI Insights Vault immediately!";
+            shadowColor = "rgba(255, 77, 109, 0.4)";
+        }
+
+        if (scoreGradeEl) {
+            scoreGradeEl.textContent = grade;
+            if (scoreValEl) scoreValEl.style.textShadow = `0 0 20px ${shadowColor}`;
+        }
+        if (scoreSubEl) scoreSubEl.textContent = subMsg;
+
+        // Evaluate and Render badges
+        const challengesContainer = document.getElementById('quests-challenges-list');
+        const badgesContainer = document.getElementById('quests-badges-container');
+
+        if (!challengesContainer || !badgesContainer) return;
+
+        // Quest states evaluations
+        const monthlyData = this.getFilteredTransactions(true);
+        const monthlyIncome = monthlyData.filter(t => t.type === 'Income').reduce((s, t) => s + t.amount, 0);
+        const monthlyExpenses = monthlyData.filter(t => t.type === 'Expense').reduce((s, t) => s + t.amount, 0);
+        const savingsRatio = monthlyIncome > 0 ? (monthlyIncome - monthlyExpenses) / monthlyIncome : 0;
+
+        let hasEnvelopeLimits = false;
+        let exceededEnvelope = false;
+        Object.keys(this.categories).forEach(cat => {
+            const lim = parseFloat(this.categories[cat].budget || 0);
+            if (lim > 0) {
+                hasEnvelopeLimits = true;
+                const spent = monthlyData.filter(t => t.type === 'Expense' && t.category === cat).reduce((sum, t) => sum + t.amount, 0);
+                if (spent > lim) exceededEnvelope = true;
+            }
+        });
+
+        // 1. Envelope Master
+        const qEnvelopeMaster = hasEnvelopeLimits && !exceededEnvelope;
+        // 2. Saver Knight
+        const qSaverKnight = savingsRatio >= 0.30;
+        // 3. Bill Destroyer
+        const unpaidBills = (this.subscriptions || []).length > 0 && !(this.subscriptions || []).some(s => {
+            // Unpaid if no settlement exists in matching category and bill name
+            const billsLogs = this.transactions.filter(t => t.type === 'Expense' && t.category === s.category && t.note.startsWith(`[Bill: ${s.name}]`));
+            return billsLogs.length === 0;
+        });
+        const qBillDestroyer = (this.subscriptions || []).length > 0 && unpaidBills;
+        // 4. Frugal Sensei
+        const qFrugalSensei = (this.quests ? (this.quests.frugalCount || 0) : 0) >= 5;
+
+        // Trigger celebratory alerts if state unlocks for the first time
+        if (!this.quests) this.quests = { envelopeMaster: false, saverKnight: false, billDestroyer: false, frugalCount: 0 };
+        
+        const checkUnlock = (key, currentVal, label) => {
+            if (currentVal && !this.quests[key]) {
+                this.quests[key] = true;
+                this.logAction('QUEST', `Badge Unlocked: ${label}`, `Earned the "${label}" quest achievement badge!`);
+                this.showToast(`🎉 Achievement Unlocked: ${label}!`, 'success');
+                this.saveToLocal();
+                this.saveToCloud();
+            }
+        };
+
+        checkUnlock('envelopeMaster', qEnvelopeMaster, 'Envelope Master');
+        checkUnlock('saverKnight', qSaverKnight, 'Saver Knight');
+        checkUnlock('billDestroyer', qBillDestroyer, 'Bill Destroyer');
+        checkUnlock('frugalSensei', qFrugalSensei, 'Frugal Sensei');
+
+        // Render active quests lists
+        challengesContainer.innerHTML = `
+            <div class="quest-challenge-card ${qEnvelopeMaster ? 'completed' : ''}">
+                <div>
+                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Envelope Master</h4>
+                    <p style="font-size: 0.75rem; color: var(--text-muted);">Spend 0% over budget on any category envelope limit this month.</p>
+                </div>
+                <span style="font-size: 0.75rem; font-weight: 700; color: ${qEnvelopeMaster ? '#00ff88' : '#eab308'};">
+                    ${qEnvelopeMaster ? 'UNLOCKED' : (hasEnvelopeLimits ? 'ACTIVE' : 'SETUP LIMITS')}
+                </span>
+            </div>
+            <div class="quest-challenge-card ${qSaverKnight ? 'completed' : ''}">
+                <div>
+                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Saver Knight</h4>
+                    <p style="font-size: 0.75rem; color: var(--text-muted);">Save 30% or more of your active income flows this month.</p>
+                    <div style="width: 100px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; margin-top: 6px; overflow: hidden;">
+                        <div style="width: ${Math.min(100, savingsRatio * 100)}%; height: 100%; background: #00b3ff; border-radius: 2px;"></div>
+                    </div>
+                </div>
+                <span style="font-size: 0.75rem; font-weight: 700; color: ${qSaverKnight ? '#00ff88' : '#eab308'};">
+                    ${(savingsRatio * 100).toFixed(0)}% / 30%
+                </span>
+            </div>
+            <div class="quest-challenge-card ${qBillDestroyer ? 'completed' : ''}">
+                <div>
+                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Bill Destroyer</h4>
+                    <p style="font-size: 0.75rem; color: var(--text-muted);">Settle all pre-configured subscription planner bills before their due day.</p>
+                </div>
+                <span style="font-size: 0.75rem; font-weight: 700; color: ${qBillDestroyer ? '#00ff88' : '#eab308'};">
+                    ${qBillDestroyer ? 'UNLOCKED' : ((this.subscriptions || []).length > 0 ? 'UNPAID PENDING' : 'NO SUBS')}
+                </span>
+            </div>
+            <div class="quest-challenge-card ${qFrugalSensei ? 'completed' : ''}">
+                <div>
+                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Frugal Sensei</h4>
+                    <p style="font-size: 0.75rem; color: var(--text-muted);">Perform at least 5 price affordability evaluations inside the Insights Vault.</p>
+                </div>
+                <span style="font-size: 0.75rem; font-weight: 700; color: ${qFrugalSensei ? '#00ff88' : '#eab308'};">
+                    ${this.quests.frugalCount || 0} / 5 Checked
+                </span>
+            </div>
+        `;
+
+        // Render badges slots
+        badgesContainer.innerHTML = `
+            <div class="quest-badge-slot ${qEnvelopeMaster ? 'unlocked' : 'locked'}">
+                <div class="badge-icon-wrapper">
+                    <i data-lucide="shield-check"></i>
+                </div>
+                <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">Envelope Master</h4>
+                <span style="font-size: 0.65rem; color: var(--text-muted);">Zero Budget Breaks</span>
+            </div>
+            <div class="quest-badge-slot ${qSaverKnight ? 'unlocked' : 'locked'}">
+                <div class="badge-icon-wrapper">
+                    <i data-lucide="trophy"></i>
+                </div>
+                <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">Saver Knight</h4>
+                <span style="font-size: 0.65rem; color: var(--text-muted);">30%+ Monthly Saving</span>
+            </div>
+            <div class="quest-badge-slot ${qBillDestroyer ? 'unlocked' : 'locked'}">
+                <div class="badge-icon-wrapper">
+                    <i data-lucide="zap"></i>
+                </div>
+                <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">Bill Destroyer</h4>
+                <span style="font-size: 0.65rem; color: var(--text-muted);">Cleared Subscriptions</span>
+            </div>
+            <div class="quest-badge-slot ${qFrugalSensei ? 'unlocked' : 'locked'}">
+                <div class="badge-icon-wrapper">
+                    <i data-lucide="sparkles"></i>
+                </div>
+                <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">Frugal Sensei</h4>
+                <span style="font-size: 0.65rem; color: var(--text-muted);">5+ Smart Calculations</span>
+            </div>
+        `;
+
+        if (window.lucide) window.lucide.createIcons();
+    }
+
+    // ==========================================
+    // Phase 8: Shared Wallets & Bill Splitting
+    // ==========================================
+
+    renderSharedWallets() {
+        // Render split category selections
+        const splitCatSelect = document.getElementById('split-category');
+        if (splitCatSelect) {
+            splitCatSelect.innerHTML = '';
+            Object.keys(this.categories).forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                splitCatSelect.appendChild(opt);
+            });
+        }
+
+        // Render activity feed
+        const feedContainer = document.getElementById('shared-activity-feed');
+        if (feedContainer) {
+            feedContainer.innerHTML = '';
+            (this.sharedActivity || []).slice().reverse().forEach(act => {
+                const item = document.createElement('div');
+                item.className = `shared-activity-item ${act.type === 'quest' ? 'quest' : ''}`;
+                item.innerHTML = `
+                    <div class="shared-activity-icon">
+                        <i data-lucide="${act.type === 'quest' ? 'award' : 'user'}"></i>
+                    </div>
+                    <div style="flex: 1;">
+                        <p style="color: var(--text-main); font-weight: 500; margin: 0; line-height: 1.3;">${act.text}</p>
+                        <span style="font-size: 0.65rem; color: var(--text-muted);">${act.time}</span>
+                    </div>
+                `;
+                feedContainer.appendChild(item);
+            });
+
+            if ((this.sharedActivity || []).length === 0) {
+                feedContainer.innerHTML = `<p style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.8rem;">No activity log recorded.</p>`;
+            }
+        }
+
+        // Render Split ledger summary
+        const ledgerContainer = document.getElementById('shared-split-ledger');
+        if (ledgerContainer) {
+            ledgerContainer.innerHTML = '';
+            (this.sharedWallets || []).forEach(split => {
+                const card = document.createElement('div');
+                card.className = 'shared-split-card glass';
+
+                const shareOwed = parseFloat(split.totalCost) / (split.members.length + 1);
+                const isSettled = split.status === 'Settled';
+
+                card.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <h4 style="font-size: 1rem; font-weight: 700; color: var(--text-main);">${split.title}</h4>
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Category: ${split.category}</span>
+                        </div>
+                        <span class="split-status-pill ${split.status.toLowerCase()}">${split.status}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; border-top: 1px solid var(--glass-border); padding-top: 8px; margin-top: 4px;">
+                        <span style="color: var(--text-muted);">Total Cost:</span>
+                        <span style="font-weight: 700; color: var(--text-main);">${this.formatCurrency(split.totalCost)}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted);">
+                        <span>Your Portion:</span>
+                        <span style="font-weight: 600; color: #00ff88;">${this.formatCurrency(shareOwed)}</span>
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); background: rgba(255,255,255,0.02); padding: 8px; border-radius: 6px;">
+                        <strong>Members:</strong> ${split.members.join(', ')} (${this.formatCurrency(shareOwed)}/person owed)
+                    </div>
+                    ${!isSettled ? `
+                        <button class="btn-primary" onclick="window.app.settleSplitBill('${split.id}')" style="padding: 6px; font-size: 0.8rem; font-weight: 600; width: 100%; border-radius: 6px; background: linear-gradient(135deg, #00ff88, #00b3ff);">Reconcile & Settle Shares</button>
+                    ` : `
+                        <div style="text-align: center; font-size: 0.75rem; color: #00ff88; font-weight: 600;"><i data-lucide="check-circle" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>All members fully settled!</div>
+                    `}
+                `;
+                ledgerContainer.appendChild(card);
+            });
+
+            if ((this.sharedWallets || []).length === 0) {
+                ledgerContainer.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 2.5rem; color: var(--text-muted);">
+                        <i data-lucide="users" style="width: 48px; height: 48px; opacity: 0.3; margin-bottom: 0.5rem; display: inline-block;"></i>
+                        <p>No split expense groups created. Complete the Splitting form above to distribute bills with housemates!</p>
+                    </div>
+                `;
+            }
+        }
+
+        if (window.lucide) window.lucide.createIcons();
+    }
+
+    handleBillSplit(e) {
+        e.preventDefault();
+        const title = document.getElementById('split-title').value;
+        const amount = parseFloat(document.getElementById('split-amount').value);
+        const category = document.getElementById('split-category').value;
+        const membersStr = document.getElementById('split-members').value;
+
+        const members = membersStr.split(',').map(m => m.trim()).filter(m => m.length > 0);
+        if (members.length === 0) {
+            this.showToast('Please specify at least one member name!', 'error');
+            return;
+        }
+
+        const id = 'split_' + Date.now();
+        const newSplit = {
+            id,
+            title,
+            totalCost: amount,
+            category,
+            members,
+            status: 'Pending'
+        };
+
+        this.sharedWallets.push(newSplit);
+
+        // Append split activity feed logs
+        const personalShare = amount / (members.length + 1);
+        this.logSharedActivity('user', `Shared bill "${title}" split evenly. Each owes ${this.formatCurrency(personalShare)}`);
+
+        // Post personal cost fraction as a local expense in ledger
+        const transaction = {
+            id: ++this.lastTransactionId,
+            type: 'Expense',
+            category,
+            amount: personalShare,
+            date: new Date().toISOString().split('T')[0],
+            person: members[0], // Trace member tag
+            notes: `[Split: ${title}] - Personal portion of group bill.`
+        };
+
+        this.transactions.push(transaction);
+        this.logAction('CREATE', `Split Transaction: ${title}`, `Logged split personal cost.`);
+        this.showToast('Group Split calculated & posted!', 'success');
+
+        document.getElementById('shared-split-form').reset();
+        this.saveToLocal();
+        this.saveToCloud();
+        this.updateUI();
+        this.renderSharedWallets();
+    }
+
+    settleSplitBill(id) {
+        const split = this.sharedWallets.find(s => s.id === id);
+        if (!split) return;
+
+        this.confirmDialog(`Mark group split "${split.title}" as fully settled & reconciled?`, 'check-circle').then(ok => {
+            if (ok) {
+                split.status = 'Settled';
+                this.logSharedActivity('quest', `Reconciled all shares of "${split.title}" split ledger successfully.`);
+                this.showToast(`Split reconciled!`, 'success');
+                
+                this.saveToLocal();
+                this.saveToCloud();
+                this.renderSharedWallets();
+            }
+        });
+    }
+
+    logSharedActivity(type, text) {
+        if (!this.sharedActivity) this.sharedActivity = [];
+        this.sharedActivity.push({
+            id: Date.now(),
+            type,
+            text,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+    }
+
 }
 
 document.addEventListener('DOMContentLoaded', () => window.app = new SpendWise());
