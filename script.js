@@ -82,59 +82,71 @@ class SpendWise {
     }
 
     initFirebase() {
+        // Generate a unique session ID to identify this specific browser tab
+        this.clientId = Math.random().toString(36).substring(7);
+        
         if (!this.firebaseConfig.apiKey.startsWith('PASTE')) {
             try {
                 firebase.initializeApp(this.firebaseConfig);
                 this.db = firebase.database();
                 this.isLive = true;
                 this.syncWithCloud();
-                console.log("🚀 Firebase Live Sync Active");
+                console.log("🚀 Firebase Ironclad Sync Active | ID: " + this.clientId);
             } catch (err) {
                 console.error("❌ Firebase Init Failed:", err);
                 this.showToast("Cloud Sync Failed. Running offline.", "error");
             }
-        } else {
-            console.warn("⚠️ Firebase Config not provided. Running in Offline Mode.");
         }
     }
 
     async syncWithCloud() {
         if (!this.isLive) return;
-
+        
         const vaultRef = this.db.ref(`vaults/${this.vaultId}`);
+        this.syncLock = false;
 
-        // Initial Fetch
+        // 1. Initial Handshake: Local vs Cloud
         vaultRef.once('value', (snapshot) => {
             const cloudData = snapshot.val();
             if (cloudData) {
-                console.log("📥 Loading existing Cloud Data...");
-                this.transactions = cloudData.transactions || [];
-                this.budget = cloudData.budget || 0;
-                this.categories = cloudData.categories || this.categories;
-                this.settings = cloudData.settings || this.settings;
-                this.auditLog = cloudData.auditLog || [];
-                
-                // FORCE RE-INDEX ON SYNC to ensure strict 1..N order
-                this.reindexTransactions();
-                
-                this.saveToLocal();
-                this.updateUI();
-                this.showToast("Cloud Vault Synced", "success");
-            } else {
-                // CLOUD IS EMPTY - This is likely the first time connection
-                console.log("📤 Cloud is empty. Performing initial upload...");
-                this.saveToCloud(); // Push local data to the new cloud vault
-                this.showToast("Initial Cloud Backup Created!", "success");
+                const cloudCount = (cloudData.transactions || []).length;
+                const localCount = this.transactions.length;
+
+                // PROTECTION: Local Supremacy
+                if (localCount > cloudCount) {
+                    console.log("🛡️ Local has more data (" + localCount + " vs " + cloudCount + "). Force Pushing to Cloud...");
+                    this.saveToCloud();
+                } else {
+                    // Pull if Cloud has MORE data OR if they are equal (to sync logs/settings)
+                    console.log("📥 Syncing Cloud Data (" + cloudCount + " records)...");
+                    this.transactions = cloudData.transactions || [];
+                    this.budget = cloudData.budget || 0;
+                    this.categories = cloudData.categories || this.categories;
+                    this.settings = cloudData.settings || this.settings;
+                    this.auditLog = cloudData.auditLog || [];
+                    this.lastTransactionId = cloudData.lastTransactionId || this.transactions.length;
+                    
+                    this.reindexTransactions();
+                    this.saveToLocal(true);
+                    this.updateUI();
+                }
+            } else if (this.transactions.length > 0) {
+                this.saveToCloud();
             }
         });
 
-        // Listen for remote changes
+        // 2. Real-time Listener with ID Guard
         vaultRef.on('value', (snapshot) => {
+            if (this.syncLock) return; // Don't pull while we are busy pushing
+            
             const data = snapshot.val();
-            if (data && data.lastUpdateBy !== 'self') {
+            if (data && data.lastUpdateId !== this.clientId) {
+                console.log("🔄 Remote change detected. Updating UI...");
                 this.transactions = data.transactions || [];
                 this.budget = data.budget || 0;
+                this.categories = data.categories || this.categories;
                 this.updateUI();
+                this.saveToLocal(true);
             }
         });
     }
@@ -145,28 +157,50 @@ class SpendWise {
         this.updateUI();
     }
 
-    saveToLocal() {
+    saveToLocal(isSyncFromCloud = false) {
         localStorage.setItem('transactions', JSON.stringify(this.transactions));
         localStorage.setItem('monthlyBudget', this.budget);
         localStorage.setItem('categories', JSON.stringify(this.categories));
         localStorage.setItem('settings', JSON.stringify(this.settings));
         localStorage.setItem('auditLog', JSON.stringify(this.auditLog));
         localStorage.setItem('lastTransactionId', this.lastTransactionId);
+        
+        if (!isSyncFromCloud) {
+            localStorage.setItem('lastLocalUpdate', Date.now());
+        }
     }
 
     saveToCloud() {
-        if (!this.isLive) return;
+        if (!this.isLive || !this.db) {
+            console.warn("☁️ Cannot save to cloud: Firebase not initialized.");
+            return;
+        }
         
-        this.db.ref(`vaults/${this.vaultId}`).set({
+        console.log("📤 Attempting Cloud Sync...");
+        this.syncLock = true; 
+        
+        const vaultData = {
             transactions: this.transactions,
             budget: this.budget,
             categories: this.categories,
             settings: this.settings,
             auditLog: this.auditLog,
             lastTransactionId: this.lastTransactionId,
-            lastUpdateBy: 'self',
+            lastUpdateId: this.clientId,
             timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
+        };
+
+        this.db.ref(`vaults/${this.vaultId}`).set(vaultData)
+            .then(() => {
+                console.log("✅ Cloud Sync Successful!");
+                // Keep lock for a bit to let Firebase propagate
+                setTimeout(() => { this.syncLock = false; }, 2000);
+            })
+            .catch((error) => {
+                console.error("❌ Cloud Sync Failed:", error);
+                this.syncLock = false;
+                this.showToast("Cloud Sync Error! Check connection.", "error");
+            });
     }
 
     reindexTransactions() {
@@ -248,7 +282,13 @@ class SpendWise {
         this.efficiencyFillEl = document.getElementById('efficiency-fill');
         this.efficiencyPercentEl = document.getElementById('efficiency-percent');
         this.efficiencyMsgEl = document.getElementById('efficiency-msg');
+        this.debtPersonListEl = document.getElementById('debt-person-list');
+        this.auditLogListEl = document.getElementById('audit-log-list');
         this.aiRecommendsListEl = document.getElementById('ai-recommends-list');
+        
+        this.isInitializing = true;
+        this.lastBudgetStatus = 'healthy';
+        setTimeout(() => { this.isInitializing = false; }, 3000); // 3-second quiet mode
         this.trendPeriodEl = document.getElementById('trend-period');
         this.smartPersonSelector = document.getElementById('smart-person-selector');
         this.sortByEl = document.getElementById('sort-by');
@@ -527,17 +567,26 @@ class SpendWise {
         this.debtBalanceEl.textContent = this.formatCurrency(Math.abs(totalDebtBalance));
         this.spentPercentageEl.textContent = `${spentPercent.toFixed(1)}% of budget`;
 
-        // Smart Budget Alerts
+        // Smart Budget Alerts (Shows once per status change)
         if (this.budget > 0) {
-            if (spentPercent >= 100) {
-                this.showToast('🚨 Budget Exceeded! You have spent more than your monthly limit.', 'error');
-                this.budgetCard.classList.add('over-budget');
-            } else if (spentPercent >= 80) {
-                this.showToast(`⚠️ Budget Warning: You have used ${spentPercent.toFixed(0)}% of your budget.`, 'info');
-                this.budgetCard.classList.remove('over-budget');
-            } else {
-                this.budgetCard.classList.remove('over-budget');
+            const currentStatus = spentPercent >= 100 ? 'exceeded' : (spentPercent >= 80 ? 'warning' : 'healthy');
+            
+            // Only trigger toast if the status has actually CHANGED (e.g. healthy -> warning)
+            if (currentStatus !== this.lastBudgetStatus) {
+                if (currentStatus === 'exceeded') {
+                    this.showToast('🚨 Budget Exceeded! You have spent more than your monthly limit.', 'error');
+                } else if (currentStatus === 'warning') {
+                    this.showToast(`⚠️ Budget Warning: You have used ${spentPercent.toFixed(0)}% of your budget.`, 'info');
+                }
+                this.lastBudgetStatus = currentStatus; // Save status to prevent duplicates
             }
+        }
+
+        // Always update visual styling regardless of initialization
+        if (spentPercent >= 100) {
+            this.budgetCard?.classList.add('over-budget');
+        } else {
+            this.budgetCard?.classList.remove('over-budget');
         }
 
         if (totalDebtBalance > 0) {
@@ -554,6 +603,7 @@ class SpendWise {
         // Update Lists & Charts
         this.renderTransactions();
         this.renderFullTransactions();
+        this.renderAuditVault(); // Ensure Audit Log is refreshed
         this.updateCharts(monthlyData);
         this.renderExtendedAnalytics(monthlyData);
 
@@ -901,29 +951,53 @@ class SpendWise {
         };
 
         if (this.editingId) {
-            t.id = this.editingId;
             const index = this.transactions.findIndex(item => item.id === this.editingId);
             if (index !== -1) {
                 const old = this.transactions[index];
-                this.logAction('EDIT', `Transaction #${t.id}`, `Updated record.`, {
-                    from: `${this.formatCurrency(old.amount)} (${old.type})`,
-                    to: `${this.formatCurrency(t.amount)} (${t.type})`
+                
+                // Update the transaction in memory
+                this.transactions[index] = {
+                    ...old,
+                    type: t.type,
+                    amount: t.amount,
+                    category: t.category,
+                    date: t.date, // Explicitly update the date
+                    note: t.note,
+                    person: t.person,
+                    dueDate: t.dueDate
+                };
+
+                // Deep Compare for Audit Log
+                const changes = [];
+                if (old.amount !== t.amount) changes.push(`Amount: ${this.formatCurrency(old.amount)} → ${this.formatCurrency(t.amount)}`);
+                if (old.category !== t.category) changes.push(`Category: ${old.category} → ${t.category}`);
+                if (old.date !== t.date) changes.push(`Date: ${old.date} → ${t.date}`);
+                if (old.note !== t.note) changes.push(`Note updated`);
+                
+                this.logAction('EDIT', `Transaction #${this.editingId}`, changes.join(' | ') || 'Updated details', {
+                    old: old,
+                    new: t
                 });
-                this.transactions[index] = t;
+                
+                // CRITICAL: Re-index to ensure IDs stay sequential if date order changed
+                this.reindexTransactions();
             }
             this.showToast('Transaction updated!', 'success');
         } else {
-            // STRICT SEQUENTIAL ID
-            this.reindexTransactions(); // Ensure existing sequence is clean
+            // STRICT SEQUENTIAL ID for New Records
             this.lastTransactionId++;
             t.id = this.lastTransactionId;
             
             this.transactions.unshift(t);
+            this.reindexTransactions(); // Maintain sequence
             this.logAction('CREATE', `Transaction #${t.id}`, `Added ${t.type} of ${this.formatCurrency(t.amount)}.`);
             this.showToast('Transaction added!', 'success');
         }
 
-        this.saveAndRefresh();
+        this.saveToLocal();
+        this.saveToCloud(); // FORCE IMMEDIATE CLOUD PUSH
+        this.updateUI();
+        
         this.toggleModal(this.expenseModal, false);
     }
 
@@ -986,13 +1060,21 @@ class SpendWise {
     }
 
     deleteTransaction(id) {
-        this.confirmDialog('Are you sure you want to delete this transaction?').then(ok => {
+        this.confirmDialog('Are you sure you want to delete this transaction?', 'trash-2').then(ok => {
             if (ok) {
                 const t = this.transactions.find(item => item.id === id);
-                if (t) this.logAction('DELETE', `Transaction #${t.id}: ${t.note || t.category}`, `Removed ${t.type} of ${this.formatCurrency(t.amount)}.`);
-                this.transactions = this.transactions.filter(t => t.id !== id);
-                this.saveAndRefresh();
-                this.showToast('Transaction deleted.', 'info');
+                if (t) {
+                    this.logAction('DELETE', `Transaction #${t.id}`, `Removed ${t.type} of ${this.formatCurrency(t.amount)}.`);
+                    this.transactions = this.transactions.filter(tr => tr.id !== id);
+                    
+                    // RE-INDEX to keep sequence perfect
+                    this.reindexTransactions();
+                    
+                    this.saveToLocal();
+                    this.saveToCloud();
+                    this.updateUI();
+                    this.showToast('Transaction deleted.', 'info');
+                }
             }
         });
     }
@@ -1022,7 +1104,9 @@ class SpendWise {
 
             // Re-sort descending for the UI
             this.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-            this.saveAndRefresh();
+            this.saveToLocal();
+            this.saveToCloud();
+            this.updateUI();
         }
     }
 
@@ -1053,7 +1137,10 @@ class SpendWise {
             if (ok) {
                 this.logAction('DELETE', `Category: ${name}`, `Category removed.`);
                 delete this.categories[name];
-                localStorage.setItem('categories', JSON.stringify(this.categories));
+                
+                this.saveToLocal();
+                this.saveToCloud();
+                
                 this.renderCategories();
                 this.updateTransactionFormCategories();
                 this.showToast(`Category "${name}" removed.`, 'info');
@@ -1061,9 +1148,42 @@ class SpendWise {
         });
     }
 
-    saveAndRefresh() {
-        localStorage.setItem('transactions', JSON.stringify(this.transactions));
-        this.updateUI();
+    renderAuditVault() {
+        if (!this.auditLogListEl) return;
+
+        if (this.auditLog.length === 0) {
+            this.auditLogListEl.innerHTML = '<div class="empty-state"><p>No audit logs found.</p></div>';
+            return;
+        }
+
+        this.auditLogListEl.innerHTML = this.auditLog.map(log => `
+            <div class="audit-item glass">
+                <div class="audit-icon ${log.action.toLowerCase()}">
+                    <i data-lucide="${this.getAuditIcon(log.action)}"></i>
+                </div>
+                <div class="audit-content">
+                    <div class="audit-header">
+                        <span class="audit-action">${log.action}</span>
+                        <span class="audit-time">${new Date(log.timestamp).toLocaleString()}</span>
+                    </div>
+                    <div class="audit-target">${log.target}</div>
+                    <div class="audit-message">${log.message}</div>
+                </div>
+            </div>
+        `).join('');
+
+        if (window.lucide) lucide.createIcons();
+    }
+
+    getAuditIcon(action) {
+        switch(action) {
+            case 'CREATE': return 'plus-circle';
+            case 'EDIT': return 'edit-3';
+            case 'DELETE': return 'trash-2';
+            case 'SETTLE': return 'check-circle';
+            case 'SYNC': return 'refresh-cw';
+            default: return 'activity';
+        }
     }
 
     confirmDialog(message, icon = 'help-circle') {
@@ -1418,7 +1538,6 @@ class SpendWise {
             const person = t.person || 'Unknown';
             if (!debtMap[person]) debtMap[person] = { balance: 0, history: [] };
 
-            // Positive for money you are owed, Negative for money you owe
             let impact = 0;
             if (t.type === 'Lend') impact = t.amount;
             if (t.type === 'Repay') impact = -t.amount;
@@ -1429,36 +1548,59 @@ class SpendWise {
             debtMap[person].history.push(t);
         });
 
-        const people = Object.entries(debtMap).sort((a, b) => Math.abs(b[1].balance) - Math.abs(a[1].balance));
+        const sortedPeople = Object.entries(debtMap).sort((a, b) => {
+            const aOverdue = a[1].history.some(h => h.dueDate && new Date(h.dueDate) < new Date() && a[1].balance !== 0);
+            const bOverdue = b[1].history.some(h => h.dueDate && new Date(h.dueDate) < new Date() && b[1].balance !== 0);
+            if (aOverdue && !bOverdue) return -1;
+            if (!aOverdue && bOverdue) return 1;
+            return Math.abs(b[1].balance) - Math.abs(a[1].balance);
+        });
 
-        if (people.length === 0) {
-            this.debtPersonListEl.innerHTML = '<div class="empty-state"><p>No active debts or lends found.</p></div>';
+        if (sortedPeople.length === 0) {
+            this.debtPersonListEl.innerHTML = '<div class="empty-state"><p>No active debts found.</p></div>';
             return;
         }
 
-        this.debtPersonListEl.innerHTML = people.map(([name, data]) => {
+        this.debtPersonListEl.innerHTML = sortedPeople.map(([name, data]) => {
             const balance = data.balance;
             const statusClass = balance > 0 ? 'balance-lent' : balance < 0 ? 'balance-borrowed' : 'balance-settled';
             const statusText = balance > 0 ? 'They Owe You' : balance < 0 ? 'You Owe Them' : 'Settled';
             const avatar = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
+            const hasOverdue = data.history.some(h => h.dueDate && new Date(h.dueDate) < new Date() && balance !== 0);
+
             const recentHistory = data.history.slice(0, 3).map(h => {
-                const isOverdue = h.dueDate && new Date(h.dueDate) < new Date() && balance !== 0;
-                const dueText = h.dueDate ? `Due: ${new Date(h.dueDate).toLocaleDateString('en-PK', { month: 'short', day: 'numeric' })}` : '';
+                const now = new Date();
+                const due = h.dueDate ? new Date(h.dueDate) : null;
+                const isOverdue = due && due < now && balance !== 0;
+                
+                let dueDisplay = '';
+                if (due && balance !== 0) {
+                    const diffTime = due - now;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    if (isOverdue) {
+                        dueDisplay = `<span class="due-tag overdue">Overdue by ${Math.abs(diffDays)}d</span>`;
+                    } else if (diffDays <= 3) {
+                        dueDisplay = `<span class="due-tag warning">Due in ${diffDays}d</span>`;
+                    } else {
+                        dueDisplay = `<span class="due-tag">Due: ${due.toLocaleDateString('en-PK', { month: 'short', day: 'numeric' })}</span>`;
+                    }
+                }
 
                 return `
-                    <div class="mini-item">
+                    <div class="mini-item ${isOverdue ? 'item-overdue' : ''}">
                         <div style="display:flex; flex-direction:column;">
-                            <span>${new Date(h.date).toLocaleDateString('en-PK', { month: 'short', day: 'numeric' })} - ${h.type}</span>
-                            ${dueText ? `<span class="due-badge ${isOverdue ? 'overdue' : ''}">${dueText}</span>` : ''}
+                            <span class="mini-note">${h.note || h.type}</span>
+                            <span class="mini-date">${dueDisplay || new Date(h.date).toLocaleDateString('en-PK', { month: 'short', day: 'numeric' })}</span>
                         </div>
-                        <span class="amount">${this.formatCurrency(h.amount)}</span>
+                        <span class="mini-amount">${this.formatCurrency(h.amount)}</span>
                     </div>
                 `;
             }).join('');
 
             return `
-                <div class="debt-person-card glass">
+                <div class="debt-person-card glass ${hasOverdue ? 'card-overdue' : ''}">
                     <div class="debt-card-header">
                         <div class="person-identity">
                             <div class="person-avatar">${avatar}</div>
@@ -1466,7 +1608,7 @@ class SpendWise {
                         </div>
                         <div class="debt-balance-badge ${statusClass}">${statusText}</div>
                     </div>
-                    <div class="stat-value" style="font-size: 1.5rem; margin-bottom: 1rem;">
+                    <div class="stat-value" style="font-size: 1.5rem; margin-bottom: 1rem; color: ${hasOverdue ? '#f43f5e' : 'inherit'}">
                         ${this.formatCurrency(Math.abs(balance))}
                     </div>
                     <div class="debt-mini-history">

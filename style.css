@@ -2653,3 +2653,44 @@ select option {
     .sync-badge .status-text { display: none; }
     .sync-badge { padding: 0.5rem; }
 }
+
+/* Debt Smart Reminders */
+.due-tag {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+    font-weight: 600;
+    display: inline-block;
+    margin-top: 2px;
+}
+
+.due-tag.overdue {
+    background: rgba(244, 63, 94, 0.1);
+    color: #f43f5e;
+    border: 1px solid rgba(244, 63, 94, 0.2);
+    animation: pulse-red 2s infinite;
+}
+
+.due-tag.warning {
+    background: rgba(251, 191, 36, 0.1);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.item-overdue {
+    border-left: 2px solid #f43f5e !important;
+    background: rgba(244, 63, 94, 0.02) !important;
+}
+
+.card-overdue {
+    border-color: rgba(244, 63, 94, 0.3) !important;
+    box-shadow: 0 0 15px rgba(244, 63, 94, 0.1) !important;
+}
+
+@keyframes pulse-red {
+    0% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.2); }
+    70% { box-shadow: 0 0 0 6px rgba(244, 63, 94, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+}
