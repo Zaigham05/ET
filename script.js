@@ -3616,12 +3616,143 @@ class SpendWise {
             `;
         }
 
+        if (p.includes('debt') || p.includes('loan') || p.includes('borrow') || p.includes('lend')) {
+            const netLent = monthlyData.filter(t => t.type === 'Lend').reduce((s, t) => s + t.amount, 0) - monthlyData.filter(t => t.type === 'Repay').reduce((s, t) => s + t.amount, 0);
+            const netBorrowed = monthlyData.filter(t => t.type === 'Borrow').reduce((s, t) => s + t.amount, 0) - monthlyData.filter(t => t.type === 'Payback').reduce((s, t) => s + t.amount, 0);
+            const totalDebtBalance = netLent - netBorrowed;
+
+            let debtVerdict = '';
+            let debtColor = '#00ff88';
+            if (totalDebtBalance > 0) {
+                debtVerdict = `Outstanding! Others owe you a net surplus of <strong>${this.formatCurrency(totalDebtBalance)}</strong>. Leverage risk is zero.`;
+            } else if (totalDebtBalance < 0) {
+                debtVerdict = `Alert: You owe others a net of <strong>${this.formatCurrency(Math.abs(totalDebtBalance))}</strong>. Consider paying back loans to increase your net worth.`;
+                debtColor = '#ff4d6d';
+            } else {
+                debtVerdict = `Perfect! You are completely debt-free with all outstanding accounts reconciled. Zero credit exposure!`;
+            }
+
+            return `
+                <div style="font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                    <i data-lucide="shield" style="color: ${debtColor}; width: 16px; height: 16px;"></i>
+                    🛡️ Debt Exposure Auditor
+                </div>
+                <p style="font-size: 0.85rem; line-height: 1.4; margin: 0;">${debtVerdict}</p>
+            `;
+        }
+
+        if (p.includes('goal') || p.includes('feasibility') || p.includes('wishlist')) {
+            const goalsList = this.goals || [];
+            if (goalsList.length === 0) {
+                return `
+                    <div style="font-weight: 700; margin-bottom: 6px;">🎯 Goal Feasibility Planner</div>
+                    <p style="font-size: 0.85rem; line-height: 1.4;">You have no active savings goals set up! Head to the Goals Vault to create your first wishlist target.</p>
+                `;
+            }
+
+            let totalGoalTarget = goalsList.reduce((sum, g) => sum + parseFloat(g.target || 0), 0);
+            let totalGoalCurrent = goalsList.reduce((sum, g) => sum + parseFloat(g.current || 0), 0);
+            let remainingFundingNeeded = Math.max(0, totalGoalTarget - totalGoalCurrent);
+            
+            // Calculate savings velocity (Income - Expense this month)
+            const monthlySavingsRate = Math.max(0, totalIncome - totalSpent);
+            let deadlineText = '';
+            if (monthlySavingsRate <= 0) {
+                deadlineText = `⚠️ At your current monthly savings rate ($0 or net negative), you will be unable to fund your goals. Reduce discretionary outlays to build a positive saving velocity.`;
+            } else {
+                const monthsToComplete = remainingFundingNeeded / monthlySavingsRate;
+                deadlineText = `At your current savings pace of <strong>${this.formatCurrency(monthlySavingsRate)}/month</strong>, you will fully complete all your goals in approximately <strong>${monthsToComplete.toFixed(1)} months</strong>. Keep up the disciplined pace!`;
+            }
+
+            return `
+                <div style="font-weight: 700; margin-bottom: 6px;">🎯 Goal Feasibility Planner</div>
+                <ul style="padding-left: 15px; font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px;">
+                    <li><strong>Goals Target:</strong> ${this.formatCurrency(totalGoalTarget)} (Currently funded: ${((totalGoalCurrent / Math.max(1, totalGoalTarget)) * 100).toFixed(0)}%)</li>
+                    <li><strong>Funding Gap:</strong> ${this.formatCurrency(remainingFundingNeeded)} outstanding.</li>
+                    <li><strong>Feasibility deadline:</strong> ${deadlineText}</li>
+                </ul>
+            `;
+        }
+
+        if (p.includes('bill') || p.includes('sub') || p.includes('recurring')) {
+            const subList = this.subscriptions || [];
+            if (subList.length === 0) {
+                return `
+                    <div style="font-weight: 700; margin-bottom: 6px;">📅 Subscription Overhead Audit</div>
+                    <p style="font-size: 0.85rem; line-height: 1.4;">Outstanding! You have no recurring bills or active subscriptions tracked inside the planner vault.</p>
+                `;
+            }
+
+            let totalSubOverhead = subList.reduce((sum, s) => sum + parseFloat(s.cost || 0), 0);
+            let subRatio = totalIncome > 0 ? (totalSubOverhead / totalIncome) * 100 : 0;
+            
+            const mostExpensiveSub = [...subList].sort((a, b) => b.cost - a.cost)[0];
+
+            return `
+                <div style="font-weight: 700; margin-bottom: 6px;">📅 Subscription Overhead Audit</div>
+                <ul style="padding-left: 15px; font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px;">
+                    <li><strong>Total Bill Overhead:</strong> ${this.formatCurrency(totalSubOverhead)} / month.</li>
+                    <li><strong>Overhead Ratio:</strong> Consumes <strong>${subRatio.toFixed(1)}%</strong> of your gross incoming cash flow.</li>
+                    <li><strong>Highest Service Cost:</strong> <strong>${mostExpensiveSub.name}</strong> (${this.formatCurrency(mostExpensiveSub.cost)}/mo). Consider audit-pruning this service if utility is low.</li>
+                </ul>
+            `;
+        }
+
+        if (p.includes('wealth') || p.includes('asset') || p.includes('portfolio') || p.includes('invest')) {
+            const assetsList = this.assets || [];
+            if (assetsList.length === 0) {
+                return `
+                    <div style="font-weight: 700; margin-bottom: 6px;">📈 Portfolio Allocation Audit</div>
+                    <p style="font-size: 0.85rem; line-height: 1.4;">Your Wealth Hub portfolio tracker is completely empty. Add some active assets (Real Estate, Stocks, Crypto, Cash) to get dynamic diversification audits.</p>
+                `;
+            }
+
+            let totalWealth = assetsList.reduce((sum, a) => sum + parseFloat(a.value || 0), 0);
+            
+            // Calculate allocations
+            const categorySums = {};
+            assetsList.forEach(a => {
+                categorySums[a.type] = (categorySums[a.type] || 0) + parseFloat(a.value || 0);
+            });
+
+            // Find concentration risk
+            let warningText = 'Your asset allocation looks stable and well diversified!';
+            let warningColor = '#00ff88';
+            Object.keys(categorySums).forEach(type => {
+                const pct = (categorySums[type] / Math.max(1, totalWealth)) * 100;
+                if (pct > 60) {
+                    warningText = `Concentration Alert! <strong>${type}</strong> constitutes <strong>${pct.toFixed(0)}%</strong> of your entire portfolio. Consider rebalancing into other liquid asset classes to reduce volatility.`;
+                    warningColor = '#ffb300';
+                }
+            });
+
+            const assetDetails = Object.keys(categorySums).map(type => {
+                const pct = (categorySums[type] / Math.max(1, totalWealth)) * 100;
+                return `<li><strong>${type}:</strong> ${this.formatCurrency(categorySums[type])} (${pct.toFixed(0)}%)</li>`;
+            }).join('');
+
+            return `
+                <div style="font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                    <i data-lucide="info" style="color: ${warningColor}; width: 16px; height: 16px;"></i>
+                    📈 Portfolio Allocation Audit
+                </div>
+                <ul style="padding-left: 15px; font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px;">
+                    ${assetDetails}
+                </ul>
+                <p style="font-size: 0.8rem; line-height: 1.4; color: var(--text-muted); margin: 0;">${warningText}</p>
+            `;
+        }
+
         return `
             <div style="font-weight: 700; margin-bottom: 6px;">🤖 AI Advisor Desk</div>
             <p style="font-size: 0.85rem; line-height: 1.4;">I've scanned your financial profile! Ask me:
             <br>• "🔍 Monthly Summary" to review gross trends.
             <br>• "📊 Budget Velocities" to search for fast spends.
-            <br>• "💡 Saving Strategies" to get custom frugality suggestions.</p>
+            <br>• "💡 Saving Strategies" to get custom frugality suggestions.
+            <br>• "🛡️ Debt Exposure" to audit net loans.
+            <br>• "🎯 Goal Feasibility" to forecast savings deadlines.
+            <br>• "📅 Bill Audit" to examine recurring bills overhead.
+            <br>• "📈 Portfolio Audit" to analyze asset concentrations.</p>
         `;
     }
 
