@@ -821,6 +821,23 @@ class SpendWise {
         if (this.sharedSplitForm) {
             this.sharedSplitForm.addEventListener('submit', (e) => this.handleBillSplit(e));
         }
+
+        // Auto-hide Mobile Bottom Nav on Scroll
+        let lastScrollY = window.scrollY;
+        window.addEventListener('scroll', () => {
+            const mobileNav = document.querySelector('.mobile-nav');
+            if (!mobileNav) return;
+
+            const currentScrollY = window.scrollY;
+            if (currentScrollY > lastScrollY && currentScrollY > 100) {
+                // Scrolling down - hide menu
+                mobileNav.classList.add('nav-hidden');
+            } else {
+                // Scrolling up - show menu
+                mobileNav.classList.remove('nav-hidden');
+            }
+            lastScrollY = currentScrollY;
+        }, { passive: true });
     }
 
     updateSmartPersonSuggestions(type) {
@@ -1007,7 +1024,24 @@ class SpendWise {
 
     // --- Views & Rendering ---
 
+    toggleSidebar(forceState = null) {
+        const sidebar = document.getElementById('main-sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+        if (!sidebar || !overlay) return;
+
+        if (forceState === false) {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('open');
+            return;
+        }
+
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('open');
+    }
+
     switchView(viewName) {
+        this.toggleSidebar(false); // Auto-close mobile sidebar upon navigation
+
         this.navLinks.forEach(link => link.classList.toggle('active', link.id === `nav-${viewName}`));
         this.views.forEach(view => view.classList.toggle('active', view.id === `view-${viewName}`));
 

@@ -154,6 +154,9 @@
             </div>
         </aside>
 
+        <!-- Sidebar Mobile Overlay -->
+        <div id="sidebar-overlay" class="sidebar-overlay" onclick="window.app.toggleSidebar()"></div>
+
         <!-- Main Content -->
         <main class="main-content">
             <header class="top-header glass">
@@ -396,11 +399,11 @@
                             </h3>
                             <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 1.25rem;">Input a planned purchase price to see if your cash flow and budget envelopes can comfortably accommodate it.</p>
                             
-                            <form id="affordability-form" style="display: flex; gap: 12px; margin-bottom: 1.25rem;">
-                                <div style="position: relative; flex-grow: 1;">
-                                    <input type="number" id="affordability-price" placeholder="Enter purchase price..." required min="0" step="any" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0,0,0,0.2); color: var(--text-main); font-size: 0.9rem;">
+                            <form id="affordability-form" style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 1.25rem;">
+                                <div style="position: relative; flex-grow: 1; min-width: 150px;">
+                                    <input type="number" id="affordability-price" placeholder="Enter purchase price..." required min="0" step="any" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px;">
                                 </div>
-                                <button class="btn-primary" type="submit" style="padding: 0 1.5rem; border-radius: 12px;">Evaluate</button>
+                                <button class="btn-primary" type="submit" style="padding: 0.75rem 1.5rem; border-radius: 12px; flex-grow: 1;">Evaluate</button>
                             </form>
                             
                             <!-- Result Box -->
@@ -1085,9 +1088,9 @@
                 <i data-lucide="pie-chart"></i>
                 <span>Stats</span>
             </a>
-            <a href="javascript:void(0)" class="mobile-tab" onclick="app.switchView('settings')">
-                <i data-lucide="settings"></i>
-                <span>Settings</span>
+            <a href="javascript:void(0)" class="mobile-tab" onclick="window.app.toggleSidebar()">
+                <i data-lucide="menu"></i>
+                <span>Menu</span>
             </a>
         </div>
     </nav>
