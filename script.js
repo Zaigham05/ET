@@ -464,6 +464,8 @@ class SpendWise {
         // Stat Elements
         this.totalIncomeEl = document.getElementById('total-income');
         this.totalBudgetEl = document.getElementById('total-budget');
+        this.totalBudgetSubtitleEl = document.getElementById('total-budget-subtitle');
+        this.allocatedBudgetEl = document.getElementById('allocated-budget');
         this.totalSpentEl = document.getElementById('total-spent');
         this.debtBalanceEl = document.getElementById('debt-balance');
         this.cashInHandEl = document.getElementById('cash-in-hand');
@@ -673,6 +675,78 @@ class SpendWise {
         this.categoryForm.addEventListener('submit', (e) => this.handleCategorySubmit(e));
 
         this.budgetCard.addEventListener('click', () => this.toggleModal(this.budgetModal, true));
+
+        // Cash Balance Adjustment Event Listeners
+        const cashCard = document.getElementById('cash-card');
+        if (cashCard) {
+            cashCard.addEventListener('click', () => {
+                const currentCash = this.getCashInHand();
+                const calcBalanceEl = document.getElementById('cash-calculated-balance');
+                const actualAmountInput = document.getElementById('cash-actual-amount');
+                
+                if (calcBalanceEl) calcBalanceEl.textContent = this.formatCurrency(currentCash);
+                if (actualAmountInput) actualAmountInput.value = Math.round(currentCash);
+                
+                this.toggleModal(document.getElementById('cash-adjustment-modal'), true);
+            });
+        }
+
+        const closeCashBtn = document.getElementById('close-cash-modal');
+        if (closeCashBtn) {
+            closeCashBtn.addEventListener('click', () => {
+                this.toggleModal(document.getElementById('cash-adjustment-modal'), false);
+            });
+        }
+
+        const cashAdjustmentForm = document.getElementById('cash-adjustment-form');
+        if (cashAdjustmentForm) {
+            cashAdjustmentForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const actualCash = parseFloat(document.getElementById('cash-actual-amount').value);
+                const calculatedCash = this.getCashInHand();
+                const diff = actualCash - calculatedCash;
+                const modal = document.getElementById('cash-adjustment-modal');
+
+                if (diff === 0) {
+                    this.showToast('No balance adjustment needed!', 'info');
+                    this.toggleModal(modal, false);
+                    return;
+                }
+
+                if (diff > 0) {
+                    // Actual cash is higher: create positive adjustment transaction (Income)
+                    const newTransaction = {
+                        id: Date.now().toString(),
+                        type: 'Income',
+                        amount: diff,
+                        category: 'Other',
+                        date: new Date().toISOString().split('T')[0],
+                        note: 'Cash Balance Adjustment (Correction)'
+                    };
+                    this.transactions.push(newTransaction);
+                    this.logAction('CREATE', `Adjustment: +${diff}`, 'Adjusted cash balance upward.');
+                } else {
+                    // Actual cash is lower: create negative adjustment transaction (Expense)
+                    const newTransaction = {
+                        id: Date.now().toString(),
+                        type: 'Expense',
+                        amount: Math.abs(diff),
+                        category: 'Other',
+                        date: new Date().toISOString().split('T')[0],
+                        note: 'Cash Balance Adjustment (Correction)'
+                    };
+                    this.transactions.push(newTransaction);
+                    this.logAction('CREATE', `Adjustment: -${Math.abs(diff)}`, 'Adjusted cash balance downward.');
+                }
+
+                this.reindexTransactions();
+                this.saveToLocal();
+                this.saveToCloud();
+                this.updateUI();
+                this.showToast('💵 Cash balance adjusted and synchronized!', 'success');
+                this.toggleModal(modal, false);
+            });
+        }
 
         if (this.clearAuditBtn) {
             this.clearAuditBtn.addEventListener('click', () => {
@@ -947,7 +1021,29 @@ class SpendWise {
         const cashInHand = (totalIncome + totalBorrowed + totalRepaid) - (totalSpent + totalLent + totalPaidback);
         this.cashInHand = cashInHand;
 
-        const spentPercent = this.budget > 0 ? (totalSpent / this.budget) * 100 : 0;
+        // Calculate monthly needed goals savings
+        const today = new Date();
+        let monthlyGoalSavingsNeeded = 0;
+        const activeGoals = this.goals || [];
+        activeGoals.forEach(g => {
+            const current = parseFloat(g.current || 0);
+            const target = parseFloat(g.target || 0);
+            if (current < target) {
+                let monthsRemaining = 1;
+                if (g.deadline) {
+                    const dl = new Date(g.deadline);
+                    if (dl > today) {
+                        monthsRemaining = (dl.getFullYear() - today.getFullYear()) * 12 + (dl.getMonth() - today.getMonth());
+                        if (monthsRemaining <= 0) monthsRemaining = 1;
+                    }
+                }
+                const gap = target - current;
+                monthlyGoalSavingsNeeded += (gap / monthsRemaining);
+            }
+        });
+
+        const spendableBudget = Math.max(0, this.budget - monthlyGoalSavingsNeeded);
+        const spentPercent = spendableBudget > 0 ? (totalSpent / spendableBudget) * 100 : 0;
 
         const totalGoalsSavings = (this.goals || []).reduce((sum, g) => sum + parseFloat(g.current || 0), 0);
         const totalUnpaidBills = (this.subscriptions || []).reduce((sum, sub) => {
@@ -972,21 +1068,33 @@ class SpendWise {
             }
         }
         this.totalIncomeEl.textContent = this.formatCurrency(totalIncome);
-        this.totalBudgetEl.textContent = this.formatCurrency(this.budget);
+        if (this.allocatedBudgetEl) this.allocatedBudgetEl.textContent = this.formatCurrency(this.budget);
+        this.totalBudgetEl.textContent = this.formatCurrency(spendableBudget);
         this.totalSpentEl.textContent = this.formatCurrency(totalSpent);
         this.debtBalanceEl.textContent = this.formatCurrency(Math.abs(totalDebtBalance));
-        this.spentPercentageEl.textContent = `${spentPercent.toFixed(1)}% of budget`;
+        this.spentPercentageEl.textContent = `${spentPercent.toFixed(1)}% of safe budget`;
+
+        // Update budget subtitle to show exclusions
+        if (this.totalBudgetSubtitleEl) {
+            if (monthlyGoalSavingsNeeded > 0) {
+                this.totalBudgetSubtitleEl.textContent = `Safe Spend (excl. ${this.formatCurrency(monthlyGoalSavingsNeeded)} goals)`;
+                this.totalBudgetSubtitleEl.className = 'stat-change positive';
+            } else {
+                this.totalBudgetSubtitleEl.textContent = 'Set Goal';
+                this.totalBudgetSubtitleEl.className = 'stat-change neutral';
+            }
+        }
 
         // Smart Budget Alerts (Shows once per status change)
-        if (this.budget > 0) {
+        if (spendableBudget > 0) {
             const currentStatus = spentPercent >= 100 ? 'exceeded' : (spentPercent >= 80 ? 'warning' : 'healthy');
             
             // Only trigger toast if the status has actually CHANGED (e.g. healthy -> warning)
             if (currentStatus !== this.lastBudgetStatus) {
                 if (currentStatus === 'exceeded') {
-                    this.showToast('🚨 Budget Exceeded! You have spent more than your monthly limit.', 'error');
+                    this.showToast('🚨 Budget Exceeded! You have spent more than your safe monthly spend limit.', 'error');
                 } else if (currentStatus === 'warning') {
-                    this.showToast(`⚠️ Budget Warning: You have used ${spentPercent.toFixed(0)}% of your budget.`, 'info');
+                    this.showToast(`⚠️ Budget Warning: You have used ${spentPercent.toFixed(0)}% of your safe budget.`, 'info');
                 }
                 this.lastBudgetStatus = currentStatus; // Save status to prevent duplicates
             }
@@ -2046,10 +2154,169 @@ class SpendWise {
 
     handleSetBudget(e) {
         e.preventDefault();
-        this.budget = parseFloat(document.getElementById('budget-amount').value);
+        const budgetVal = parseFloat(document.getElementById('budget-amount').value);
+        this.budget = budgetVal;
         this.setLocal('monthlyBudget', this.budget);
         this.updateUI();
         this.toggleModal(this.budgetModal, false);
+        
+        // Firing the AI Smart Budget Optimizer!
+        this.triggerAIBudgetAdvisor(budgetVal);
+    }
+
+    triggerAIBudgetAdvisor(totalBudget) {
+        const modal = document.getElementById('ai-budget-advisor-modal');
+        if (!modal) return;
+
+        // 1. Calculate savings required across all active goals
+        const today = new Date();
+        let totalGoalSavingsNeeded = 0;
+        
+        const activeGoals = this.goals || [];
+        activeGoals.forEach(g => {
+            const current = parseFloat(g.current || 0);
+            const target = parseFloat(g.target || 0);
+            if (current < target) {
+                let monthsRemaining = 1;
+                if (g.deadline) {
+                    const dl = new Date(g.deadline);
+                    if (dl > today) {
+                        monthsRemaining = (dl.getFullYear() - today.getFullYear()) * 12 + (dl.getMonth() - today.getMonth());
+                        if (monthsRemaining <= 0) monthsRemaining = 1;
+                    }
+                }
+                const gap = target - current;
+                totalGoalSavingsNeeded += (gap / monthsRemaining);
+            }
+        });
+
+        // 2. Safe variable spending pool
+        const safeSpendingPool = Math.max(0, totalBudget - totalGoalSavingsNeeded);
+        const savingsRatio = totalBudget > 0 ? (totalGoalSavingsNeeded / totalBudget) * 100 : 0;
+
+        // Populate basic info
+        document.getElementById('ai-budget-savings-needed').textContent = this.formatCurrency(totalGoalSavingsNeeded);
+        document.getElementById('ai-budget-savings-ratio').textContent = `${savingsRatio.toFixed(0)}% of total`;
+        document.getElementById('ai-budget-spending-pool').textContent = this.formatCurrency(safeSpendingPool);
+
+        // 3. Historical Spending Ratios & Smart Baseline Weights
+        const defaultWeights = {
+            Salary: 0.0,
+            Food: 0.35,
+            Transport: 0.15,
+            Housing: 0.25,
+            Tech: 0.10,
+            Entertainment: 0.10,
+            Debt: 0.0,
+            Other: 0.05
+        };
+
+        const allExpenses = this.transactions.filter(t => t.type === 'Expense');
+        const totalHistoricalSpend = allExpenses.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+
+        const historicalCategorySpend = {};
+        allExpenses.forEach(t => {
+            if (!historicalCategorySpend[t.category]) historicalCategorySpend[t.category] = 0;
+            historicalCategorySpend[t.category] += parseFloat(t.amount || 0);
+        });
+
+        // 4. Calculate envelope breakdown using Bayesian Smoothing
+        // 70% entire history ratios + 30% baseline expectations to smooth out anomalies
+        const activeCategories = Object.keys(this.categories).filter(cat => cat !== 'Salary' && cat !== 'Debt');
+        this.recommendedCategoryBudgets = {};
+
+        let ratioSum = 0;
+        const categorySmoothedRatios = {};
+        activeCategories.forEach(cat => {
+            const defaultWeight = defaultWeights[cat] !== undefined ? defaultWeights[cat] : 0.10;
+            const historicalRatio = totalHistoricalSpend > 0 ? (historicalCategorySpend[cat] || 0) / totalHistoricalSpend : defaultWeight;
+            
+            const smoothedRatio = (0.70 * historicalRatio) + (0.30 * defaultWeight);
+            categorySmoothedRatios[cat] = smoothedRatio;
+            ratioSum += smoothedRatio;
+        });
+
+        // Normalize so ratios sum exactly to 1.0 (100%)
+        activeCategories.forEach(cat => {
+            categorySmoothedRatios[cat] = categorySmoothedRatios[cat] / (ratioSum || 1);
+        });
+
+        const listContainer = document.getElementById('ai-budget-category-list');
+        if (listContainer) {
+            if (activeCategories.length === 0) {
+                listContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 1rem;">No active categories available.</div>`;
+            } else {
+                listContainer.innerHTML = activeCategories.map(cat => {
+                    const catData = this.categories[cat];
+                    const ratio = categorySmoothedRatios[cat] || 0;
+                    const recommendedVal = safeSpendingPool * ratio;
+                    
+                    // Store for applying
+                    this.recommendedCategoryBudgets[cat] = Math.round(recommendedVal);
+
+                    return `
+                        <div class="glass" style="padding: 0.75rem 1rem; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.02);">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: ${catData.color || 'var(--primary)'};"></span>
+                                <span style="font-weight: 600; color: var(--text-main);">${cat}</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <span style="font-weight: 700; color: var(--primary);">${this.formatCurrency(recommendedVal)}</span>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">${(ratio * 100).toFixed(0)}% weight</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        // 5. Setup Action Buttons event listeners
+        const applyBtn = document.getElementById('btn-apply-ai-budget');
+        const skipBtn = document.getElementById('btn-skip-ai-budget');
+        const closeBtn = document.getElementById('close-ai-budget-modal');
+
+        const cleanListeners = () => {
+            const newApply = applyBtn.cloneNode(true);
+            applyBtn.parentNode.replaceChild(newApply, applyBtn);
+            const newSkip = skipBtn.cloneNode(true);
+            skipBtn.parentNode.replaceChild(newSkip, skipBtn);
+            const newClose = closeBtn.cloneNode(true);
+            closeBtn.parentNode.replaceChild(newClose, closeBtn);
+        };
+        
+        cleanListeners();
+
+        document.getElementById('btn-apply-ai-budget').addEventListener('click', () => {
+            this.applyAIBudgetSuggestions();
+            this.toggleModal(modal, false);
+        });
+
+        document.getElementById('btn-skip-ai-budget').addEventListener('click', () => {
+            this.toggleModal(modal, false);
+            this.showToast('Budget saved (AI envelopes skipped).', 'info');
+        });
+
+        document.getElementById('close-ai-budget-modal').addEventListener('click', () => {
+            this.toggleModal(modal, false);
+        });
+
+        if (window.lucide) lucide.createIcons();
+        this.toggleModal(modal, true);
+    }
+
+    applyAIBudgetSuggestions() {
+        if (!this.recommendedCategoryBudgets) return;
+
+        Object.entries(this.recommendedCategoryBudgets).forEach(([cat, budget]) => {
+            if (this.categories[cat]) {
+                this.categories[cat].budget = budget;
+            }
+        });
+
+        this.saveToLocal();
+        this.saveToCloud();
+        this.updateUI();
+        this.showToast('🤖 AI Smart Envelopes successfully configured and activated!', 'success');
     }
 
     editTransaction(id) {

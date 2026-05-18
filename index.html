@@ -223,7 +223,7 @@
                                 <span class="stat-change negative" id="spent-percentage">0% of budget</span>
                             </div>
                         </div>
-                        <div class="stat-card glass">
+                        <div class="stat-card glass clickable" id="cash-card">
                             <div class="stat-icon balance" style="background: rgba(0, 229, 255, 0.1); color: var(--primary);">
                                 <i data-lucide="banknote"></i>
                             </div>
@@ -233,14 +233,27 @@
                                 <span class="stat-change positive" id="cash-in-hand-subtitle">Current Liquidity</span>
                             </div>
                         </div>
+                        <!-- Card 4: Total Budget Allocated (Clickable to Set Budget) -->
                         <div class="stat-card glass clickable" id="budget-card">
-                            <div class="stat-icon budget">
+                            <div class="stat-icon budget" style="background: rgba(112, 0, 255, 0.1); color: #7000ff;">
+                                <i data-lucide="calculator"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Allocated Budget</h3>
+                                <p class="stat-value" id="allocated-budget">PKR 0</p>
+                                <span class="stat-change neutral">Set Limit</span>
+                            </div>
+                        </div>
+
+                        <!-- Card 5: Safe Spending Budget (Excluding Goals) -->
+                        <div class="stat-card glass" id="safe-spending-card" style="border: 1px solid rgba(0, 229, 255, 0.15); background: rgba(0, 229, 255, 0.02);">
+                            <div class="stat-icon budget" style="background: rgba(0, 255, 136, 0.1); color: #00ff88;">
                                 <i data-lucide="target"></i>
                             </div>
                             <div class="stat-info">
-                                <h3>Spending Budget</h3>
-                                <p class="stat-value" id="total-budget">PKR 0</p>
-                                <span class="stat-change neutral">Set Goal</span>
+                                <h3>Safe Spending</h3>
+                                <p class="stat-value" id="total-budget" style="color: #00ff88;">PKR 0</p>
+                                <span class="stat-change positive" id="total-budget-subtitle">Goals Excluded</span>
                             </div>
                         </div>
                         <div class="stat-card glass">
@@ -1168,6 +1181,100 @@
                     <input type="number" id="budget-amount" placeholder="e.g. 50000" required>
                 </div>
                 <button type="submit" class="btn-submit">Save Budget</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for AI Smart Budget Advisor -->
+    <div id="ai-budget-advisor-modal" class="modal">
+        <div class="modal-content glass" style="max-width: 550px; border-radius: 24px; padding: 2rem;">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 1rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="display: flex; align-items: center; gap: 10px; font-size: 1.4rem; color: var(--text-main); margin: 0;">
+                    <i data-lucide="sparkles" style="color: var(--primary); width: 24px; height: 24px;"></i>
+                    AI Budget Optimizer
+                </h2>
+                <button class="close-modal" id="close-ai-budget-modal" style="font-size: 1.5rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">&times;</button>
+            </div>
+            
+            <div class="modal-body" style="color: var(--text-main); font-size: 0.95rem;">
+                <!-- Target Savings Card -->
+                <div class="glass" style="padding: 1.25rem; border-radius: 16px; margin-bottom: 1.5rem; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.15);">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
+                        <i data-lucide="target" style="color: var(--primary); width: 20px; height: 20px;"></i>
+                        <span style="font-weight: 700; color: var(--text-main);">Earmarked Goal Savings</span>
+                    </div>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 0.75rem; margin-top: 0;">
+                        To hit your active savings goals on time, you need to set aside this amount this month:
+                    </p>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 1.2rem; font-weight: 800; color: #00ff88;" id="ai-budget-savings-needed">PKR 0</span>
+                        <span style="font-size: 0.8rem; background: rgba(0, 255, 136, 0.1); color: #00ff88; padding: 4px 8px; border-radius: 8px; font-weight: 700;" id="ai-budget-savings-ratio">0% of total</span>
+                    </div>
+                </div>
+
+                <!-- Safe Spending Pool Card -->
+                <div class="glass" style="padding: 1.25rem; border-radius: 16px; margin-bottom: 1.5rem;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
+                        <i data-lucide="wallet" style="color: var(--accent-emerald); width: 20px; height: 20px;"></i>
+                        <span style="font-weight: 700; color: var(--text-main);">Safe Spending Pool</span>
+                    </div>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 0.75rem; margin-top: 0;">
+                        Remaining budget pool recommended for monthly variable expenditures:
+                    </p>
+                    <div style="font-size: 1.4rem; font-weight: 800; color: var(--text-main);" id="ai-budget-spending-pool">PKR 0</div>
+                </div>
+
+                <!-- Category Spending Envelope Suggestions -->
+                <div style="margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 8px; color: var(--text-main); margin-top: 0;">
+                        <i data-lucide="sliders" style="color: var(--primary); width: 18px; height: 18px;"></i>
+                        AI Recommended Envelopes
+                    </h3>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.4; margin-top: 0;">
+                        Optimized dynamically based on your <strong>previous month's spending patterns</strong>:
+                    </p>
+                    <div id="ai-budget-category-list" style="display: flex; flex-direction: column; gap: 12px; max-height: 200px; overflow-y: auto; padding-right: 4px;">
+                        <!-- List loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 12px; margin-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 1.25rem;">
+                <button class="btn-primary" id="btn-apply-ai-budget" style="flex: 1; border-radius: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; border: none; outline: none; cursor: pointer; padding: 0.8rem 1rem;">
+                    <i data-lucide="check-circle" style="width: 18px; height: 18px;"></i> Apply Smart Envelopes
+                </button>
+                <button class="btn-secondary" id="btn-skip-ai-budget" style="border-radius: 12px; padding: 0.8rem 1.25rem; font-weight: 600; cursor: pointer; border: 1px solid var(--glass-border); background: transparent; color: var(--text-main);">Skip</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Adjusting Cash Balance -->
+    <div id="cash-adjustment-modal" class="modal">
+        <div class="modal-content glass" style="max-width: 450px; border-radius: 20px; padding: 2rem;">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 1rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="display: flex; align-items: center; gap: 10px; font-size: 1.3rem; color: var(--text-main); margin: 0;">
+                    <i data-lucide="sliders" style="color: var(--primary); width: 22px; height: 22px;"></i>
+                    Adjust Cash Balance
+                </h2>
+                <button class="close-modal" id="close-cash-modal" style="font-size: 1.5rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">&times;</button>
+            </div>
+            
+            <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.5rem; margin-top: 0;">
+                Keep your SpendWise ledger aligned with your actual cash in hand. If there is a difference, SpendWise will create an adjustment transaction so your audit paper trail is 100% accurate!
+            </p>
+            
+            <form id="cash-adjustment-form">
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">System Calculated Balance</label>
+                    <div style="font-size: 1.5rem; font-weight: 800; color: var(--text-muted);" id="cash-calculated-balance">PKR 0</div>
+                </div>
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label for="cash-actual-amount" style="font-size: 0.8rem; color: var(--text-main); display: block; margin-bottom: 0.5rem; font-weight: 600;">Actual Physical Cash (PKR)</label>
+                    <input type="number" id="cash-actual-amount" placeholder="e.g. 15000" style="width: 100%; padding: 0.8rem 1rem; border-radius: 12px; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.05); color: var(--text-main); font-size: 1.1rem; font-weight: 700; outline: none;" required>
+                </div>
+                <button type="submit" class="btn-submit" style="width: 100%; border-radius: 12px; padding: 0.8rem 1rem; font-weight: 700; background: var(--primary); border: none; color: #000; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <i data-lucide="check-circle" style="width: 18px; height: 18px;"></i> Save Adjustments
+                </button>
             </form>
         </div>
     </div>
