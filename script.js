@@ -748,6 +748,69 @@ class SpendWise {
             });
         }
 
+        // AI Financial Coach Chat Panel Listeners
+        const coachTrigger = document.getElementById('ai-coach-trigger');
+        const coachPanel = document.getElementById('ai-coach-panel');
+        const closeCoachBtn = document.getElementById('close-ai-coach');
+        const coachForm = document.getElementById('ai-coach-form');
+        const coachInput = document.getElementById('ai-coach-input');
+
+        if (coachTrigger && coachPanel) {
+            coachTrigger.addEventListener('click', () => {
+                const isOpen = coachPanel.classList.toggle('open');
+                coachTrigger.classList.toggle('open', isOpen);
+                
+                // Hide pulsing badge once opened
+                const pulseBadge = coachTrigger.querySelector('.trigger-badge-pulse');
+                if (pulseBadge && isOpen) pulseBadge.style.display = 'none';
+
+                // Scroll to bottom on open
+                if (isOpen) {
+                    const msgContainer = document.getElementById('ai-coach-messages');
+                    if (msgContainer) msgContainer.scrollTop = msgContainer.scrollHeight;
+                    if (coachInput) coachInput.focus();
+                }
+            });
+        }
+
+        if (closeCoachBtn && coachPanel && coachTrigger) {
+            closeCoachBtn.addEventListener('click', () => {
+                coachPanel.classList.remove('open');
+                coachTrigger.classList.remove('open');
+            });
+        }
+
+        // Chip button queries
+        const chipButtons = document.querySelectorAll('.ai-coach-chips .chip-btn');
+        chipButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const queryType = btn.getAttribute('data-query');
+                this.handleCoachQueryType(queryType);
+            });
+        });
+
+        if (coachForm && coachInput) {
+            coachForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const questionText = coachInput.value.trim();
+                if (!questionText) return;
+
+                // 1. Render User Message
+                this.renderCoachMessage(questionText, 'user');
+                coachInput.value = '';
+
+                // 2. Render typing indicator
+                const typingId = this.renderCoachTypingIndicator();
+
+                // 3. Process AI advice with realistic lag (600ms)
+                setTimeout(() => {
+                    this.removeCoachTypingIndicator(typingId);
+                    const aiResponse = this.generateAIResponse(questionText);
+                    this.renderCoachMessage(aiResponse, 'bot');
+                }, 600);
+            });
+        }
+
         if (this.clearAuditBtn) {
             this.clearAuditBtn.addEventListener('click', () => {
                 this.confirmDialog('Are you sure you want to clear the entire audit log?', 'trash-2').then(ok => {
@@ -1166,7 +1229,7 @@ class SpendWise {
             categories: 'Category Management',
             analytics: 'Financial Intelligence',
             debt: 'Debt Vault',
-            goals: 'Goals Vault',
+            goals: 'Gullak Savings Vault',
             insights: 'AI Insights Vault',
             recurring: 'Bills & Subscriptions Planner',
             wealth: 'Wealth Hub & Portfolios',
@@ -1174,6 +1237,8 @@ class SpendWise {
             shared: 'Shared Wallets SPLIT',
             audit: 'Audit Vault',
             calendar: 'Calendar Vault',
+            sandbox: 'Retirement & FIRE Projections',
+            import: 'CSV Statement Importer',
             settings: 'System Settings'
         };
         document.getElementById('active-view-title').textContent = titles[viewName] || 'SpendWise';
@@ -1189,6 +1254,8 @@ class SpendWise {
         if (viewName === 'shared') this.renderSharedWallets();
         if (viewName === 'audit') this.renderAuditLog();
         if (viewName === 'calendar') this.renderCalendar();
+        if (viewName === 'sandbox') this.renderSandbox();
+        if (viewName === 'import') this.initCSVImporter();
     }
 
     renderTransactions() {
@@ -1302,6 +1369,38 @@ class SpendWise {
             const isOver = spent > budget;
             const progressColor = isOver ? 'var(--secondary)' : (percent >= 80 ? '#ffb703' : 'var(--primary)');
             
+            // Calculate pacing burn velocity relative to current day of month
+            const today = new Date();
+            const currentDay = today.getDate();
+            const totalDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+            const daysRatio = currentDay / totalDays;
+            const burnVelocity = spent / budget;
+            
+            let pacingHtml = '';
+            if (isOver) {
+                pacingHtml = `
+                    <div class="pacing-badge critical" title="Envelope limit fully exhausted!">
+                        <i data-lucide="alert-triangle" style="width: 10px; height: 10px;"></i>
+                        <span>Exhausted</span>
+                    </div>
+                `;
+            } else if (burnVelocity > daysRatio * 1.25) {
+                const diffPct = Math.round((burnVelocity - daysRatio) * 100);
+                pacingHtml = `
+                    <div class="pacing-badge fast" title="Pacing is ${diffPct}% faster than day ratio (ideal pace is ${(daysRatio * 100).toFixed(0)}%). Consider scaling back.">
+                        <i data-lucide="flame" style="width: 10px; height: 10px;"></i>
+                        <span>🔥 Fast</span>
+                    </div>
+                `;
+            } else {
+                pacingHtml = `
+                    <div class="pacing-badge cool" title="Pacing is within safe daily limits. Ideal pace for today is ${(daysRatio * 100).toFixed(0)}%.">
+                        <i data-lucide="snowflake" style="width: 10px; height: 10px;"></i>
+                        <span>❄️ On Track</span>
+                    </div>
+                `;
+            }
+            
             return `
                 <div class="category-budget-item">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
@@ -1316,8 +1415,11 @@ class SpendWise {
                     <div class="progress-bar-bg">
                         <div class="progress-bar-fill" style="width: ${percent}%; background: ${progressColor}; height: 100%;"></div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
-                        <span>${percent.toFixed(0)}% Used</span>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem; align-items: center;">
+                        <span style="display: flex; align-items: center; gap: 6px;">
+                            <span>${percent.toFixed(0)}% Used</span>
+                            ${pacingHtml}
+                        </span>
                         <span>${isOver ? 'Over budget!' : `${this.formatCurrency(budget - spent)} left`}</span>
                     </div>
                 </div>
@@ -1343,9 +1445,9 @@ class SpendWise {
         if (!this.goals || this.goals.length === 0) {
             container.innerHTML = `
                 <div class="empty-state" style="grid-column: 1 / -1; text-align: center; padding: 3rem; background: rgba(255, 255, 255, 0.01); border: 1px dashed rgba(255, 255, 255, 0.05); border-radius: 18px;">
-                    <i data-lucide="target" style="width: 48px; height: 48px; color: var(--text-muted); margin-bottom: 1rem; opacity: 0.5;"></i>
-                    <h3 style="color: var(--text-main); font-weight: 600; margin-bottom: 0.5rem;">No goals set yet</h3>
-                    <p class="text-muted" style="font-size: 0.9rem;">Create a savings goal to start earmarking cash for your wishlist!</p>
+                    <i data-lucide="piggy-bank" style="width: 48px; height: 48px; color: var(--text-muted); margin-bottom: 1rem; opacity: 0.5;"></i>
+                    <h3 style="color: var(--text-main); font-weight: 600; margin-bottom: 0.5rem;">No Gullaks established yet</h3>
+                    <p class="text-muted" style="font-size: 0.9rem;">Establish a traditional clay Gullak to start saving coins for your dreams!</p>
                 </div>
             `;
             if (window.lucide) lucide.createIcons();
@@ -1381,45 +1483,95 @@ class SpendWise {
 
             const activeColor = goal.color || 'var(--primary)';
 
+            // Clay Piggy Bank SVG Progress Mapping
+            // Calculate fill y height (y varies from 28 to 95 based on percentage)
+            // 95 is empty (0% filled), 28 is full (100% filled)
+            const fillY = 95 - (percent / 100) * (95 - 28);
+
+            const gullakSvg = `
+                <div style="position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-bottom: 1.25rem;">
+                    <!-- Spawning placeholders for gold coin drop animations -->
+                    <div class="gullak-coin" id="coin-${goal.id}"></div>
+                    <div class="gullak-sparkle" id="sparkle-${goal.id}"></div>
+
+                    <svg class="gullak-jar-svg" id="svg-jar-${goal.id}" viewBox="0 0 100 120" style="width: 80px; height: 96px; filter: drop-shadow(0 8px 16px rgba(0,0,0,0.35));">
+                        <defs>
+                            <linearGradient id="clayGrad-${goal.id}" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#f09b71" />
+                                <stop offset="50%" stop-color="#d37e51" />
+                                <stop offset="100%" stop-color="#803f1e" />
+                            </linearGradient>
+                            <clipPath id="jarClip-${goal.id}">
+                                <path d="M40 28 C20 40 15 80 40 95 C45 98 55 98 60 95 C85 80 80 40 60 28 Z" />
+                            </clipPath>
+                            <linearGradient id="fillGrad-${goal.id}" x1="0%" y1="100%" x2="0%" y2="0%">
+                                <stop offset="0%" stop-color="${activeColor}" stop-opacity="0.3" />
+                                <stop offset="100%" stop-color="${activeColor}" stop-opacity="0.85" />
+                            </linearGradient>
+                        </defs>
+                        <!-- Pot neck & Slot -->
+                        <path d="M35 15 L65 15 L60 28 L40 28 Z" fill="#b1643c" stroke="#5c301c" stroke-width="1.5" />
+                        <rect x="42" y="9" width="16" height="6" rx="2" fill="#803f1e" stroke="#5c301c" stroke-width="1.5" />
+                        <line x1="45" y1="12" x2="55" y2="12" stroke="#111" stroke-width="2" stroke-linecap="round" />
+                        
+                        <!-- Pot body -->
+                        <path d="M40 28 C20 40 15 80 40 95 C45 98 55 98 60 95 C85 80 80 40 60 28 Z" fill="url(#clayGrad-${goal.id})" stroke="#5c301c" stroke-width="2" />
+                        
+                        <!-- Dynamic coin/cash progress layer -->
+                        <rect x="0" y="${fillY}" width="100" height="100" fill="url(#fillGrad-${goal.id})" clip-path="url(#jarClip-${goal.id})" />
+
+                        <!-- Inner neck details -->
+                        <path d="M40 28 Z" fill="none" stroke="#5c301c" stroke-width="0.5" />
+                    </svg>
+                </div>
+            `;
+
             return `
-                <div class="goal-card glass" style="border-top: 3px solid ${activeColor};">
+                <div class="goal-card glass" id="gullak-card-${goal.id}" style="border-top: 3px solid ${activeColor};">
                     <div class="goal-header">
                         <div class="goal-icon-wrapper" style="background: ${activeColor}20; color: ${activeColor}">
-                            <i data-lucide="${goal.icon || 'target'}"></i>
+                            <i data-lucide="${goal.icon || 'piggy-bank'}"></i>
                         </div>
                         <div class="goal-card-actions">
-                            <button class="action-btn edit" onclick="app.editGoal('${goal.id}')" title="Edit Goal"><i data-lucide="edit-3"></i></button>
-                            <button class="action-btn delete" onclick="app.deleteGoal('${goal.id}')" title="Delete Goal"><i data-lucide="trash-2"></i></button>
+                            <button class="action-btn edit" onclick="app.editGoal('${goal.id}')" title="Edit Gullak"><i data-lucide="edit-3"></i></button>
+                            <button class="action-btn delete" onclick="app.deleteGoal('${goal.id}')" title="Delete Gullak"><i data-lucide="trash-2"></i></button>
                         </div>
                     </div>
+
+                    ${gullakSvg}
+
                     <div class="goal-title-area">
                         <h3 style="display: flex; align-items: center; gap: 8px;">
                             ${goal.title}
-                            ${isCompleted ? `<span style="font-size: 0.75rem; background: rgba(0,255,136,0.15); color: #00ff88; padding: 2px 8px; border-radius: 99px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="check-circle" style="width: 10px; height: 10px;"></i> Achieved</span>` : ''}
+                            ${isCompleted ? `<span style="font-size: 0.75rem; background: rgba(0,255,136,0.15); color: #00ff88; padding: 2px 8px; border-radius: 99px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="check-circle" style="width: 10px; height: 10px;"></i> Full!</span>` : ''}
                         </h3>
                         ${deadlineHtml}
                     </div>
                     <div>
                         <div class="goal-financials">
                             <div>
-                                <span class="goal-saved">${this.formatCurrency(current)}</span>
+                                <span class="goal-saved" style="color: ${activeColor};">${this.formatCurrency(current)}</span>
                             </div>
                             <div class="goal-target-val">
-                                Target: <span>${this.formatCurrency(target)}</span>
+                                Milestone: <span>${this.formatCurrency(target)}</span>
                             </div>
                         </div>
                         <div class="progress-bar-bg" style="height: 8px; border-radius: 99px; background: rgba(255, 255, 255, 0.05); overflow: hidden; position: relative;">
                             <div class="progress-bar-fill" style="width: ${percent}%; background: ${activeColor}; height: 100%; box-shadow: 0 0 10px ${activeColor}40;"></div>
                         </div>
                         <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
-                            <span>${percent.toFixed(0)}% saved</span>
-                            <span>${isCompleted ? 'Goal Met!' : `${this.formatCurrency(target - current)} left`}</span>
+                            <span>${percent.toFixed(0)}% filled</span>
+                            <span>${isCompleted ? 'Gullak Met!' : `${this.formatCurrency(target - current)} left`}</span>
                         </div>
                     </div>
-                    <div class="goal-actions-row">
-                        <button class="btn-goal-allocate" onclick="app.openGoalAllocate('${goal.id}')" style="margin-top: 1rem; width: 100%;">
-                            <i data-lucide="dollar-sign"></i>
-                            <span>Manage Funds</span>
+                    <div class="goal-actions-row" style="display: flex; gap: 8px; margin-top: 1rem;">
+                        <button class="btn-goal-allocate" onclick="app.openGoalAllocate('${goal.id}')" style="flex: 1.2; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0.6rem 0.5rem; font-size: 0.85rem; font-weight: 700; border-radius: 10px; border: none; cursor: pointer;">
+                            <i data-lucide="coins" style="width: 14px; height: 14px;"></i>
+                            <span>Drop Coins 🪙</span>
+                        </button>
+                        <button class="btn-secondary" onclick="app.breakGullak('${goal.id}')" style="flex: 0.8; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0.6rem 0.5rem; font-size: 0.85rem; font-weight: 600; border-radius: 10px; border: 1px dashed #ff4d6d; background: rgba(255, 77, 109, 0.05); color: #ff4d6d; cursor: pointer;">
+                            <i data-lucide="hammer" style="width: 14px; height: 14px;"></i>
+                            <span>Break 🔨</span>
                         </button>
                     </div>
                 </div>
@@ -1427,6 +1579,13 @@ class SpendWise {
         }).join('');
 
         if (window.lucide) lucide.createIcons();
+    }
+
+    applyGullakPreset(title, icon, color) {
+        document.getElementById('goal-title').value = title;
+        document.getElementById('goal-icon').value = icon;
+        document.getElementById('goal-color').value = color;
+        this.showToast(`Preset "${title}" loaded successfully!`, 'info');
     }
 
     handleGoalSubmit(e) {
@@ -1437,7 +1596,7 @@ class SpendWise {
         const current = parseFloat(document.getElementById('goal-current').value) || 0;
         const color = document.getElementById('goal-color').value;
         const deadline = document.getElementById('goal-deadline').value;
-        const icon = document.getElementById('goal-icon').value.trim() || 'target';
+        const icon = document.getElementById('goal-icon').value.trim() || 'piggy-bank';
 
         const cashInHand = this.getCashInHand();
         const otherGoalsSavings = this.goals
@@ -1460,14 +1619,14 @@ class SpendWise {
                     return;
                 }
                 
-                this.logAction('EDIT', `Goal: ${title}`, `Goal limits updated. Saved changed by ${this.formatCurrency(diff)}.`);
+                this.logAction('EDIT', `Gullak: ${title}`, `Gullak configurations updated. Balance changed by ${this.formatCurrency(diff)}.`);
                 goal.title = title;
                 goal.target = target;
                 goal.current = current;
                 goal.color = color;
                 goal.deadline = deadline;
                 goal.icon = icon;
-                this.showToast('Goal updated.', 'success');
+                this.showToast('Gullak successfully updated.', 'success');
             }
         } else {
             const newGoal = {
@@ -1480,8 +1639,8 @@ class SpendWise {
                 icon
             };
             this.goals.push(newGoal);
-            this.logAction('CREATE', `Goal: ${title}`, `Created new savings target with saved amount ${this.formatCurrency(current)}.`);
-            this.showToast('Goal created successfully.', 'success');
+            this.logAction('CREATE', `Gullak: ${title}`, `Established new savings Gullak with initial coins ${this.formatCurrency(current)}.`);
+            this.showToast('Gullak established successfully.', 'success');
         }
 
         this.editingGoalId = null;
@@ -1496,15 +1655,15 @@ class SpendWise {
         if (!goal) return;
 
         this.editingGoalId = id;
-        document.getElementById('goal-modal-title').textContent = 'Edit Savings Goal';
-        document.getElementById('goal-submit-btn').textContent = 'Update Goal';
+        document.getElementById('goal-modal-title').textContent = 'Edit Gullak Portal';
+        document.getElementById('goal-submit-btn').textContent = 'Save Changes';
 
         document.getElementById('goal-title').value = goal.title;
         document.getElementById('goal-target').value = goal.target;
         document.getElementById('goal-current').value = goal.current;
-        document.getElementById('goal-color').value = goal.color || '#00e5ff';
+        document.getElementById('goal-color').value = goal.color || '#d37e51';
         document.getElementById('goal-deadline').value = goal.deadline || '';
-        document.getElementById('goal-icon').value = goal.icon || 'target';
+        document.getElementById('goal-icon').value = goal.icon || 'piggy-bank';
 
         this.toggleModal(document.getElementById('goal-modal'), true);
     }
@@ -1513,15 +1672,15 @@ class SpendWise {
         const goal = this.goals.find(g => g.id === id);
         if (!goal) return;
 
-        this.confirmDialog(`Are you sure you want to delete "${goal.title}"? Any saved funds will be returned to your active cash balance.`, 'trash-2').then(ok => {
+        this.confirmDialog(`Are you sure you want to dismiss "${goal.title}"? Any saved coins will be returned to your general Cash in Hand.`, 'trash-2').then(ok => {
             if (ok) {
-                this.logAction('DELETE', `Goal: ${goal.title}`, `Deleted goal and released ${this.formatCurrency(goal.current)} back to general available liquidity.`);
+                this.logAction('DELETE', `Gullak: ${goal.title}`, `Dismissed Gullak and released ${this.formatCurrency(goal.current)} back to general liquidity.`);
                 this.goals = this.goals.filter(g => g.id !== id);
                 
                 this.saveToLocal();
                 this.saveToCloud();
                 this.updateUI();
-                this.showToast(`Goal "${goal.title}" deleted.`, 'info');
+                this.showToast(`Gullak "${goal.title}" dismissed.`, 'info');
             }
         });
     }
@@ -1536,6 +1695,104 @@ class SpendWise {
         document.getElementById('goal-allocate-type').value = 'allocate';
 
         this.toggleModal(document.getElementById('goal-allocate-modal'), true);
+    }
+
+    triggerCoinDrop(id) {
+        const coin = document.getElementById('coin-' + id);
+        const sparkle = document.getElementById('sparkle-' + id);
+        
+        if (coin && sparkle) {
+            coin.classList.remove('gullak-coin-drop');
+            sparkle.classList.remove('gullak-sparkle-active');
+            
+            void coin.offsetWidth;
+            void sparkle.offsetWidth;
+            
+            coin.classList.add('gullak-coin-drop');
+            
+            setTimeout(() => {
+                sparkle.classList.add('gullak-sparkle-active');
+                this.showToast('🪙 Sikka! Coin dropped into Gullak!', 'success');
+                this.updateUI();
+            }, 750);
+        } else {
+            this.updateUI();
+        }
+    }
+
+    breakGullak(id) {
+        const goal = this.goals.find(g => g.id === id);
+        if (!goal) return;
+
+        this.confirmDialog(`🔨 Are you sure you want to break "${goal.title}"? All saved coins (${this.formatCurrency(goal.current)}) will be returned to your general available Cash in Hand.`, 'hammer').then(ok => {
+            if (ok) {
+                const cardEl = document.getElementById('gullak-card-' + id);
+                const svgJar = document.getElementById('svg-jar-' + id);
+                
+                if (cardEl && svgJar) {
+                    svgJar.classList.add('gullak-shaking');
+                    
+                    setTimeout(() => {
+                        svgJar.style.opacity = '0';
+                        svgJar.style.transform = 'scale(0)';
+                        
+                        const rect = svgJar.getBoundingClientRect();
+                        const cardRect = cardEl.getBoundingClientRect();
+                        const spawnX = rect.left - cardRect.left + rect.width / 2;
+                        const spawnY = rect.top - cardRect.top + rect.height / 2;
+
+                        for (let i = 0; i < 20; i++) {
+                            const shard = document.createElement('div');
+                            shard.className = 'clay-shard';
+                            shard.style.width = Math.random() * 8 + 4 + 'px';
+                            shard.style.height = Math.random() * 8 + 4 + 'px';
+                            shard.style.backgroundColor = ['#b1643c', '#d37e51', '#803f1e', '#5c301c', '#ffe600'][Math.floor(Math.random() * 5)];
+                            shard.style.top = spawnY + 'px';
+                            shard.style.left = spawnX + 'px';
+                            
+                            cardEl.appendChild(shard);
+
+                            const angle = Math.random() * Math.PI * 2;
+                            const speed = Math.random() * 150 + 50;
+                            const vx = Math.cos(angle) * speed;
+                            const vy = Math.sin(angle) * speed - 50;
+                            
+                            const startTime = Date.now();
+                            const anim = () => {
+                                const elapsed = (Date.now() - startTime) / 1000;
+                                if (elapsed >= 0.8) {
+                                    shard.remove();
+                                } else {
+                                    const px = vx * elapsed;
+                                    const py = vy * elapsed + 0.5 * 300 * elapsed * elapsed;
+                                    shard.style.transform = `translate(${px}px, ${py}px) rotate(${elapsed * 720}deg)`;
+                                    shard.style.opacity = 1 - elapsed;
+                                    requestAnimationFrame(anim);
+                                }
+                            };
+                            requestAnimationFrame(anim);
+                        }
+
+                        setTimeout(() => {
+                            this.logAction('DELETE', `Gullak: ${goal.title}`, `Broke Gullak clay pot and returned ${this.formatCurrency(goal.current)} back to general liquid balance.`);
+                            this.goals = this.goals.filter(g => g.id !== id);
+                            
+                            this.saveToLocal();
+                            this.saveToCloud();
+                            this.updateUI();
+                            this.showToast(`🔨 Dhaam! "${goal.title}" broken! All coins reclaimed.`, 'success');
+                        }, 500);
+                        
+                    }, 800);
+                } else {
+                    this.goals = this.goals.filter(g => g.id !== id);
+                    this.saveToLocal();
+                    this.saveToCloud();
+                    this.updateUI();
+                    this.showToast(`🔨 "${goal.title}" broken and funds reclaimed.`, 'success');
+                }
+            }
+        });
     }
 
     handleGoalAllocate(e) {
@@ -1563,23 +1820,27 @@ class SpendWise {
                 return;
             }
             goal.current = parseFloat(goal.current || 0) + amount;
-            this.logAction('ALLOCATE', `Goal: ${goal.title}`, `Allocated ${this.formatCurrency(amount)} from liquid cash.`);
-            this.showToast(`Allocated ${this.formatCurrency(amount)} to "${goal.title}".`, 'success');
+            this.logAction('ALLOCATE', `Gullak: ${goal.title}`, `Allocated ${this.formatCurrency(amount)} from liquid cash.`);
+            this.toggleModal(document.getElementById('goal-allocate-modal'), false);
+            this.saveToLocal();
+            this.saveToCloud();
+            
+            // Play coin-slip animation
+            this.triggerCoinDrop(goal.id);
         } else if (type === 'withdraw') {
             const currentSaved = parseFloat(goal.current || 0);
             if (amount > currentSaved) {
-                this.showToast(`Cannot withdraw more than what is saved! You only have ${this.formatCurrency(currentSaved)} saved in this goal.`, 'error');
+                this.showToast(`Cannot withdraw more than what is saved! You only have ${this.formatCurrency(currentSaved)} saved in this Gullak.`, 'error');
                 return;
             }
             goal.current = currentSaved - amount;
-            this.logAction('WITHDRAW', `Goal: ${goal.title}`, `Withdrew ${this.formatCurrency(amount)} back to active cash.`);
+            this.logAction('WITHDRAW', `Gullak: ${goal.title}`, `Withdrew ${this.formatCurrency(amount)} back to active cash.`);
+            this.toggleModal(document.getElementById('goal-allocate-modal'), false);
+            this.saveToLocal();
+            this.saveToCloud();
+            this.updateUI();
             this.showToast(`Withdrew ${this.formatCurrency(amount)} from "${goal.title}".`, 'success');
         }
-
-        this.toggleModal(document.getElementById('goal-allocate-modal'), false);
-        this.saveToLocal();
-        this.saveToCloud();
-        this.updateUI();
     }
 
     // --- Charting ---
@@ -3796,6 +4057,138 @@ class SpendWise {
         }
         
         if (window.lucide) lucide.createIcons();
+        this.scanForGhostSubscriptions();
+    }
+
+    scanForGhostSubscriptions() {
+        const scannerCard = document.getElementById('ghost-scanner-card');
+        const scannerResults = document.getElementById('ghost-scanner-results');
+        if (!scannerCard || !scannerResults) return;
+
+        const recurringKeywords = [
+            'netflix', 'spotify', 'apple', 'google', 'cloud', 'aws', 'github', 
+            'chatgpt', 'openai', 'midjourney', 'copilot', 'microsoft', 'adobe', 
+            'subscription', 'recurring', 'sub', 'membership', 'premium', 'gym',
+            'hosting', 'domain', 'saas', 'bill', 'electric', 'water', 'internet'
+        ];
+
+        // 1. Group expenses by merchant name
+        const merchantGroups = {};
+        this.transactions.forEach(t => {
+            if (t.type !== 'Expense') return;
+            const note = (t.note || '').trim();
+            if (!note) return;
+
+            // Normalize note name (lowercase, strip symbols/numbers)
+            let norm = note.toLowerCase()
+                .replace(/payment|bill|sub|subscription|monthly|yearly|fee|recharge/gi, '')
+                .replace(/[^\w\s]/gi, '')
+                .trim();
+            
+            if (norm.length < 3) return;
+
+            // Find matching group or make one
+            let groupKey = Object.keys(merchantGroups).find(k => k.includes(norm) || norm.includes(k));
+            if (!groupKey) {
+                groupKey = norm;
+                merchantGroups[groupKey] = [];
+            }
+            merchantGroups[groupKey].push(t);
+        });
+
+        // 2. Filter groups for candidates
+        const candidates = [];
+        Object.entries(merchantGroups).forEach(([name, txs]) => {
+            // Already tracked?
+            const isAlreadyTracked = (this.subscriptions || []).some(s => {
+                const subNameNorm = s.name.toLowerCase();
+                return subNameNorm.includes(name) || name.includes(subNameNorm);
+            });
+            if (isAlreadyTracked) return;
+
+            // Check if it fits recurrence triggers:
+            // Trigger A: Transaction counts >= 2 in different months
+            const distinctMonths = new Set(txs.map(t => {
+                const d = new Date(t.date);
+                return `${d.getFullYear()}-${d.getMonth()}`;
+            }));
+            const isMultiMonth = distinctMonths.size >= 2;
+
+            // Trigger B: Explicit subscription keyword in name
+            const hasKeyword = recurringKeywords.some(kw => name.includes(kw));
+
+            if (isMultiMonth || hasKeyword) {
+                // Get latest transaction details
+                const latestTx = txs.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+                const dueDay = new Date(latestTx.date).getDate();
+
+                // Format friendly display name
+                const displayName = name.split(' ')
+                    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                    .join(' ');
+
+                candidates.push({
+                    name: displayName,
+                    cost: parseFloat(latestTx.amount),
+                    category: latestTx.category || 'Other',
+                    dueDay: dueDay || 15,
+                    icon: this.categories[latestTx.category]?.icon || 'repeat'
+                });
+            }
+        });
+
+        // 3. Render candidates
+        if (candidates.length === 0) {
+            scannerCard.style.display = 'none';
+            return;
+        }
+
+        scannerCard.style.display = 'block';
+        scannerResults.innerHTML = candidates.map(c => `
+            <div class="glass" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.03); background: rgba(255,255,255,0.01); transition: all 0.2s ease;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="background: rgba(168, 85, 247, 0.1); color: #a855f7; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                        <i data-lucide="${c.icon}"></i>
+                    </div>
+                    <div>
+                        <h4 style="margin: 0; color: var(--text-main); font-size: 0.9rem; font-weight: 600;">${c.name}</h4>
+                        <div style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-muted);">
+                            <span>${c.category}</span>
+                            <span>•</span>
+                            <span>Est. Day ${c.dueDay}</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="font-weight: 700; color: var(--text-main); font-size: 0.9rem;">${this.formatCurrency(c.cost)}</div>
+                    <button class="btn-primary" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; font-weight: 700; background: linear-gradient(135deg, #a855f7, #00b3ff);" onclick="window.app.autoTrackGhostSub('${c.name.replace(/'/g, "\\'")}', ${c.cost}, ${c.dueDay}, '${c.category}', '${c.icon}')">
+                        <i data-lucide="plus" style="width: 12px; height: 12px; margin-right: 2px;"></i> Auto-Track
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+        if (window.lucide) lucide.createIcons();
+    }
+
+    autoTrackGhostSub(name, cost, dueDay, category, icon) {
+        const newSub = {
+            id: 'sub_' + Date.now(),
+            name,
+            cost: parseFloat(cost),
+            dueDay: parseInt(dueDay),
+            category,
+            icon
+        };
+        
+        this.subscriptions.push(newSub);
+        this.logAction('CREATE', `Subscription: ${name}`, `Auto-detected and registered recurring bill of ${this.formatCurrency(cost)} due on day ${dueDay}.`);
+        this.showToast(`Registered "${name}" as active bill!`, 'success');
+
+        this.saveToLocal();
+        this.saveToCloud();
+        this.updateUI();
+        this.renderRecurringPlanner();
     }
 
     renderAIInsights() {
@@ -3878,7 +4271,7 @@ class SpendWise {
                 <div style="font-weight: 700; margin-bottom: 6px;">📈 Monthly Financial Summary</div>
                 <ul style="padding-left: 15px; font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px;">
                     <li><strong>Total Cash flow:</strong> Income of ${this.formatCurrency(totalIncome)} against Spends of ${this.formatCurrency(totalSpent)}.</li>
-                    <li><strong>Earmarked reserves:</strong> Earmarked goals savings are ${this.formatCurrency(totalGoalsSavings)}. Unpaid recurring bills total ${this.formatCurrency(unpaidSubTotal)}.</li>
+                    <li><strong>Earmarked reserves:</strong> Earmarked Gullak savings are ${this.formatCurrency(totalGoalsSavings)}. Unpaid recurring bills total ${this.formatCurrency(unpaidSubTotal)}.</li>
                     <li><strong>Liquidity Health:</strong> You are currently saving <strong>${savingsRatio.toFixed(1)}%</strong> of your gross monthly cash inflow.</li>
                 </ul>
             `;
@@ -4491,15 +4884,32 @@ class SpendWise {
         // 3. Bill Destroyer
         const unpaidBills = (this.subscriptions || []).length > 0 && !(this.subscriptions || []).some(s => {
             // Unpaid if no settlement exists in matching category and bill name
-            const billsLogs = this.transactions.filter(t => t.type === 'Expense' && t.category === s.category && t.note.startsWith(`[Bill: ${s.name}]`));
+            const billsLogs = this.transactions.filter(t => t.type === 'Expense' && t.category === s.category && (t.note || '').startsWith(`[Bill: ${s.name}]`));
             return billsLogs.length === 0;
         });
         const qBillDestroyer = (this.subscriptions || []).length > 0 && unpaidBills;
         // 4. Frugal Sensei
         const qFrugalSensei = (this.quests ? (this.quests.frugalCount || 0) : 0) >= 5;
 
+        // 5. Wealth Creator (3+ holdings and total value >= 1000)
+        const totalPortfolioVal = (this.assets || []).reduce((sum, a) => sum + (parseFloat(a.qty) * parseFloat(a.currentPrice)), 0);
+        const qWealthCreator = (this.assets || []).length >= 3 && totalPortfolioVal >= 1000;
+
+        // 6. Debt Defeater (Settle debt or payback/repay)
+        const qDebtDefeater = this.transactions.some(t => ['Repay', 'Payback'].includes(t.type) || (t.note && t.note.toLowerCase().includes('settlement')));
+
+        // 7. Cash Commander (Cash balance adjustment)
+        const qCashCommander = this.transactions.some(t => t.note && t.note.toLowerCase().includes('cash balance adjustment'));
+
+        // 8. Consistent Logger (10+ overall transactions logged)
+        const qConsistentLogger = this.transactions.length >= 10;
+
         // Trigger celebratory alerts if state unlocks for the first time
-        if (!this.quests) this.quests = { envelopeMaster: false, saverKnight: false, billDestroyer: false, frugalCount: 0 };
+        if (!this.quests) this.quests = { envelopeMaster: false, saverKnight: false, billDestroyer: false, frugalCount: 0, wealthCreator: false, debtDefeater: false, cashCommander: false, consistentLogger: false };
+        if (this.quests.wealthCreator === undefined) this.quests.wealthCreator = false;
+        if (this.quests.debtDefeater === undefined) this.quests.debtDefeater = false;
+        if (this.quests.cashCommander === undefined) this.quests.cashCommander = false;
+        if (this.quests.consistentLogger === undefined) this.quests.consistentLogger = false;
         
         const checkUnlock = (key, currentVal, label) => {
             if (currentVal && !this.quests[key]) {
@@ -4515,6 +4925,10 @@ class SpendWise {
         checkUnlock('saverKnight', qSaverKnight, 'Saver Knight');
         checkUnlock('billDestroyer', qBillDestroyer, 'Bill Destroyer');
         checkUnlock('frugalSensei', qFrugalSensei, 'Frugal Sensei');
+        checkUnlock('wealthCreator', qWealthCreator, 'Wealth Creator');
+        checkUnlock('debtDefeater', qDebtDefeater, 'Debt Defeater');
+        checkUnlock('cashCommander', qCashCommander, 'Cash Commander');
+        checkUnlock('consistentLogger', qConsistentLogger, 'Consistent Logger');
 
         // Render active quests lists
         challengesContainer.innerHTML = `
@@ -4557,6 +4971,42 @@ class SpendWise {
                     ${this.quests.frugalCount || 0} / 5 Checked
                 </span>
             </div>
+            <div class="quest-challenge-card ${qWealthCreator ? 'completed' : ''}">
+                <div>
+                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Wealth Creator</h4>
+                    <p style="font-size: 0.75rem; color: var(--text-muted);">Track 3+ active holdings worth at least $1,000 in your Wealth Hub ledger.</p>
+                </div>
+                <span style="font-size: 0.75rem; font-weight: 700; color: ${qWealthCreator ? '#00ff88' : '#eab308'};">
+                    ${qWealthCreator ? 'UNLOCKED' : `${(this.assets || []).length} / 3 Holdings`}
+                </span>
+            </div>
+            <div class="quest-challenge-card ${qDebtDefeater ? 'completed' : ''}">
+                <div>
+                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Debt Defeater</h4>
+                    <p style="font-size: 0.75rem; color: var(--text-muted);">Completely settle an outstanding loan balance with payback/repay actions.</p>
+                </div>
+                <span style="font-size: 0.75rem; font-weight: 700; color: ${qDebtDefeater ? '#00ff88' : '#eab308'};">
+                    ${qDebtDefeater ? 'UNLOCKED' : 'ACTIVE'}
+                </span>
+            </div>
+            <div class="quest-challenge-card ${qCashCommander ? 'completed' : ''}">
+                <div>
+                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Cash Commander</h4>
+                    <p style="font-size: 0.75rem; color: var(--text-muted);">Proactively log a Cash Balance Adjustment to reconcile cash-in-hand flows.</p>
+                </div>
+                <span style="font-size: 0.75rem; font-weight: 700; color: ${qCashCommander ? '#00ff88' : '#eab308'};">
+                    ${qCashCommander ? 'UNLOCKED' : 'ACTIVE'}
+                </span>
+            </div>
+            <div class="quest-challenge-card ${qConsistentLogger ? 'completed' : ''}">
+                <div>
+                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Consistent Logger</h4>
+                    <p style="font-size: 0.75rem; color: var(--text-muted);">Log 10 or more overall financial transactions in your SpendWise history feed.</p>
+                </div>
+                <span style="font-size: 0.75rem; font-weight: 700; color: ${qConsistentLogger ? '#00ff88' : '#eab308'};">
+                    ${this.transactions.length} / 10 Logged
+                </span>
+            </div>
         `;
 
         // Render badges slots
@@ -4588,6 +5038,34 @@ class SpendWise {
                 </div>
                 <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">Frugal Sensei</h4>
                 <span style="font-size: 0.65rem; color: var(--text-muted);">5+ Smart Calculations</span>
+            </div>
+            <div class="quest-badge-slot ${qWealthCreator ? 'unlocked' : 'locked'}">
+                <div class="badge-icon-wrapper">
+                    <i data-lucide="gem"></i>
+                </div>
+                <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">Wealth Creator</h4>
+                <span style="font-size: 0.65rem; color: var(--text-muted);">3+ Holdings Tracked</span>
+            </div>
+            <div class="quest-badge-slot ${qDebtDefeater ? 'unlocked' : 'locked'}">
+                <div class="badge-icon-wrapper">
+                    <i data-lucide="shield"></i>
+                </div>
+                <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">Debt Defeater</h4>
+                <span style="font-size: 0.65rem; color: var(--text-muted);">Settled Loans</span>
+            </div>
+            <div class="quest-badge-slot ${qCashCommander ? 'unlocked' : 'locked'}">
+                <div class="badge-icon-wrapper">
+                    <i data-lucide="banknote"></i>
+                </div>
+                <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">Cash Commander</h4>
+                <span style="font-size: 0.65rem; color: var(--text-muted);">Ledger Reconciled</span>
+            </div>
+            <div class="quest-badge-slot ${qConsistentLogger ? 'unlocked' : 'locked'}">
+                <div class="badge-icon-wrapper">
+                    <i data-lucide="calendar"></i>
+                </div>
+                <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">Consistent Logger</h4>
+                <span style="font-size: 0.65rem; color: var(--text-muted);">10+ Items Logged</span>
             </div>
         `;
 
@@ -4785,6 +5263,837 @@ class SpendWise {
             text,
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
+    }
+
+    renderCoachMessage(text, sender) {
+        const msgContainer = document.getElementById('ai-coach-messages');
+        if (!msgContainer) return;
+
+        const messageEl = document.createElement('div');
+        messageEl.className = `message ${sender}`;
+        
+        // Suppress HTML injection while allowing markdown bolding
+        let formattedText = text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/\n/g, '<br>');
+
+        messageEl.innerHTML = formattedText;
+        msgContainer.appendChild(messageEl);
+
+        // Instant smooth scroll
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+    }
+
+    renderCoachTypingIndicator() {
+        const msgContainer = document.getElementById('ai-coach-messages');
+        if (!msgContainer) return null;
+
+        const typingId = 'typing-' + Date.now();
+        const typingEl = document.createElement('div');
+        typingEl.className = 'message bot';
+        typingEl.id = typingId;
+        typingEl.innerHTML = `
+            <div class="typing-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        `;
+        msgContainer.appendChild(typingEl);
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+        return typingId;
+    }
+
+    removeCoachTypingIndicator(id) {
+        if (!id) return;
+        const typingEl = document.getElementById(id);
+        if (typingEl) typingEl.remove();
+    }
+
+    handleCoachQueryType(queryType) {
+        // Render user request
+        let userText = "";
+        if (queryType === 'goals') userText = "🎯 Check active savings goals status";
+        else if (queryType === 'budget') userText = "🍔 Analyze Food category spending pace";
+        else if (queryType === 'anomalies') userText = "📈 Scan for my peak spending transaction";
+        else if (queryType === 'tips') userText = "💡 Generate custom saving advice";
+
+        this.renderCoachMessage(userText, 'user');
+
+        const typingId = this.renderCoachTypingIndicator();
+        setTimeout(() => {
+            this.removeCoachTypingIndicator(typingId);
+            const botResponse = this.generateAIResponse(queryType);
+            this.renderCoachMessage(botResponse, 'bot');
+        }, 500);
+    }
+
+    generateAIResponse(input) {
+        const cleanInput = input.toLowerCase().trim();
+        const monthlyData = this.getFilteredTransactions(true);
+        const expenses = monthlyData.filter(t => t.type === 'Expense');
+        const totalSpent = expenses.reduce((sum, t) => sum + t.amount, 0);
+
+        // 1. SCENARIO: Goals Query
+        if (cleanInput.includes('goal') || cleanInput.includes('save') || cleanInput.includes('savings')) {
+            const activeGoals = this.goals || [];
+            const active = activeGoals.filter(g => parseFloat(g.current || 0) < parseFloat(g.target || 0));
+
+            if (active.length === 0) {
+                return "🎯 You currently don't have any incomplete active savings goals! Set a new one on your Goals Hub to start building wealth.";
+            }
+
+            let response = "📊 **Active Savings Goals Breakdown:**\n\n";
+            const today = new Date();
+            
+            active.forEach(g => {
+                const current = parseFloat(g.current || 0);
+                const target = parseFloat(g.target || 0);
+                const pct = ((current / target) * 100).toFixed(0);
+                
+                let monthsRemaining = 1;
+                if (g.deadline) {
+                    const dl = new Date(g.deadline);
+                    if (dl > today) {
+                        monthsRemaining = (dl.getFullYear() - today.getFullYear()) * 12 + (dl.getMonth() - today.getMonth());
+                        if (monthsRemaining <= 0) monthsRemaining = 1;
+                    }
+                }
+                const needed = ((target - current) / monthsRemaining).toFixed(0);
+
+                response += `• **${g.title}**: Set ${pct}% (` + this.formatCurrency(current) + ` / ` + this.formatCurrency(target) + `).\n`;
+                response += `  *Pacing:* You must save **` + this.formatCurrency(needed) + `/month** for the next ${monthsRemaining} months to finish exactly on target.\n\n`;
+            });
+
+            response += "💡 *Tip:* Your goals are protected! We've automatically locked away this month's needed targets from your dashboard Safe Spending Budget card.";
+            return response;
+        }
+
+        // 2. SCENARIO: Food Pace or Specific Category Queries
+        if (cleanInput.includes('food') || cleanInput.includes('budget') || cleanInput.includes('category') || cleanInput.includes('pace')) {
+            // Find category
+            let catName = 'Food';
+            if (cleanInput.includes('transport')) catName = 'Transport';
+            else if (cleanInput.includes('housing')) catName = 'Housing';
+            else if (cleanInput.includes('entertainment')) catName = 'Entertainment';
+            else if (cleanInput.includes('tech')) catName = 'Tech';
+
+            const catTotal = expenses.filter(t => t.category === catName).reduce((sum, t) => sum + t.amount, 0);
+            const catBudget = (this.categories && this.categories[catName]) ? parseFloat(this.categories[catName].limit || 0) : 0;
+
+            if (catBudget === 0) {
+                return `🍔 **${catName} Spending Info:**\n\nYou have spent **` + this.formatCurrency(catTotal) + `** on ${catName} this month. You currently haven't set an envelope spending limit for this category. Adjust this inside your AI Smart Envelope Modal!`;
+            }
+
+            const pct = ((catTotal / catBudget) * 100).toFixed(0);
+            const today = new Date();
+            const currentDay = today.getDate();
+            const totalDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+            const idealPct = ((currentDay / totalDays) * 100).toFixed(0);
+
+            let statusMsg = "";
+            if (parseFloat(pct) > parseFloat(idealPct) * 1.25) {
+                statusMsg = `🔥 **Velocity Alert:** Your burn velocity is *too high*! You are on Day ${currentDay} of the month (${idealPct}% of days elapsed) but have consumed **${pct}%** of your ${catName} cap. Try to scale back.`;
+            } else {
+                statusMsg = `❄️ **Pacing Perfectly:** You are pacing beautifully! You've used **${pct}%** of your ${catName} budget with ${totalDays - currentDay} days remaining.`;
+            }
+
+            return `🍔 **${catName} Velocity Report:**\n\n• **Limit Cap:** ` + this.formatCurrency(catBudget) + `\n• **Spent Today:** ` + this.formatCurrency(catTotal) + ` (${pct}% consumed)\n\n${statusMsg}`;
+        }
+
+        // 3. SCENARIO: Anomalies / Highest / Peak Spent Query
+        if (cleanInput.includes('anomalies') || cleanInput.includes('peak') || cleanInput.includes('highest') || cleanInput.includes('big')) {
+            if (expenses.length === 0) {
+                return "📈 You haven't added any expense transactions this month! Check back after you log a purchase.";
+            }
+
+            const sorted = [...expenses].sort((a, b) => b.amount - a.amount);
+            const highest = sorted[0];
+
+            let response = `📈 **Monthly Peak Spent Analysis:**\n\nYour highest single transaction is **` + this.formatCurrency(highest.amount) + `** for **${highest.category}** on **${highest.date}**.\n`;
+            response += `• **Transaction details:** *"${highest.note || 'No description entered'}"*\n\n`;
+
+            // Calculate percentage of total spent
+            const peakPct = ((highest.amount / totalSpent) * 100).toFixed(0);
+            response += `💡 This single item accounts for **${peakPct}%** of your total monthly expenditures (` + this.formatCurrency(totalSpent) + `).`;
+            return response;
+        }
+
+        // 4. SCENARIO: Saving Tips / Advice
+        if (cleanInput.includes('tips') || cleanInput.includes('advice') || cleanInput.includes('save money') || cleanInput.includes('frugal')) {
+            if (expenses.length === 0) {
+                return "💡 **Saving Advice:**\n\nAdd transactions to let me analyze your personalized saving strategies! In the meantime, try setting a **Savings Goal** to automatically activate safe earmark shields.";
+            }
+
+            // Find highest spending category
+            const catTotals = {};
+            expenses.forEach(t => {
+                catTotals[t.category] = (catTotals[t.category] || 0) + t.amount;
+            });
+            const topCategory = Object.keys(catTotals).reduce((a, b) => catTotals[a] > catTotals[b] ? a : b);
+
+            let tipResponse = `💡 **Personalized AI Wealth Insights:**\n\nBased on your transactions, your top discretionary spending category is **${topCategory}** (` + this.formatCurrency(catTotals[topCategory]) + `).\n\n`;
+            tipResponse += `**Actionable Saving Tips:**\n`;
+            tipResponse += `1. **Track ${topCategory} Trajectory:** Consider cutting 15% in ${topCategory} next week by switching to home alternatives. This would save you approximately **` + this.formatCurrency(catTotals[topCategory] * 0.15) + `**!\n`;
+            tipResponse += `2. **Earmark Savings Shield:** Try creating a savings goal. We will automatically exclude that amount from your dashboard so it cannot be spent accidentally!\n`;
+            tipResponse += `3. **Daily Pacing Check:** Glance at your new *Safe Spending* card on the dashboard to ensure you stay below your day-by-day average cap.`;
+
+            return tipResponse;
+        }
+
+        // 5. DEFAULT FALLBACK RESPONSES
+        return `🤖 **SpendWise AI Assistant Online!**\n\nI can help you analyze your financial patterns, manage your savings, and secure your budgets! Try asking me:\n• *"Check active savings goals"*\n• *"How is my food budget pacing?"*\n• *"What was my biggest expense?"*\n• *"Give me custom saving tips"*`;
+    }
+
+    renderSandbox() {
+        // Pre-fill starting wealth based on active Wealth Hub assets
+        if (this.assets && this.assets.length > 0) {
+            const totalAssetVal = this.assets.reduce((sum, a) => sum + (parseFloat(a.value) || 0), 0);
+            const wealthSlider = document.getElementById('sandbox-wealth');
+            if (wealthSlider) {
+                // Ensure total asset value is within slider limits
+                wealthSlider.value = Math.min(500000, Math.round(totalAssetVal));
+            }
+        }
+        
+        // Initialize/Update Sandbox Calculations and Chart
+        this.updateSandbox();
+    }
+
+    updateSandbox() {
+        const ageSlider = document.getElementById('sandbox-age');
+        const wealthSlider = document.getElementById('sandbox-wealth');
+        const savingsSlider = document.getElementById('sandbox-savings');
+        const yieldSlider = document.getElementById('sandbox-yield');
+        const fireSlider = document.getElementById('sandbox-fire');
+
+        if (!ageSlider || !wealthSlider || !savingsSlider || !yieldSlider || !fireSlider) return;
+
+        const age = parseInt(ageSlider.value);
+        const startingCapital = parseFloat(wealthSlider.value);
+        const monthlySavings = parseFloat(savingsSlider.value);
+        const annualYield = parseFloat(yieldSlider.value);
+        const fireTarget = parseFloat(fireSlider.value);
+
+        // Update Slider Labels
+        document.getElementById('sandbox-age-val').textContent = `${age} Years`;
+        document.getElementById('sandbox-wealth-val').textContent = this.formatCurrency(startingCapital);
+        document.getElementById('sandbox-savings-val').textContent = `${this.formatCurrency(monthlySavings)} / mo`;
+        document.getElementById('sandbox-yield-val').textContent = `${annualYield}% / Year`;
+        document.getElementById('sandbox-fire-val').textContent = this.formatCurrency(fireTarget);
+
+        // Project monthly for 30 years (360 months)
+        const years = 30;
+        const totalMonths = years * 12;
+        const monthlyRate = (annualYield / 12) / 100;
+        
+        let capital = startingCapital;
+        const projections = [];
+        let fireYear = null;
+        let fireMonth = null;
+
+        projections.push({ year: 0, age: age, balance: capital });
+
+        for (let m = 1; m <= totalMonths; m++) {
+            capital = capital * (1 + monthlyRate) + monthlySavings;
+            
+            if (capital >= fireTarget && fireYear === null) {
+                fireMonth = m;
+                fireYear = Math.ceil(m / 12);
+            }
+
+            if (m % 12 === 0) {
+                projections.push({
+                    year: m / 12,
+                    age: age + (m / 12),
+                    balance: capital
+                });
+            }
+        }
+
+        // Draw Dynamic SVG Trend Chart
+        const svg = document.getElementById('sandbox-chart-svg');
+        if (svg) {
+            svg.innerHTML = ''; // Clear existing contents
+
+            // Calculate Max Projected Balance to scale Y-axis
+            const maxProjections = projections.map(p => p.balance);
+            const maxBalance = Math.max(...maxProjections, fireTarget, startingCapital, 1000);
+
+            // Chart Box Dimensions
+            const paddingLeft = 60;
+            const paddingRight = 30;
+            const paddingTop = 30;
+            const paddingBottom = 40;
+            
+            const chartWidth = 500;
+            const chartHeight = 220;
+
+            const graphWidth = chartWidth - paddingLeft - paddingRight;
+            const graphHeight = chartHeight - paddingTop - paddingBottom;
+
+            // Generate Path Points
+            const points = projections.map(p => {
+                const x = paddingLeft + (p.year / years) * graphWidth;
+                const y = chartHeight - paddingBottom - (p.balance / maxBalance) * graphHeight;
+                return { x, y };
+            });
+
+            // Linear Line String
+            const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+            
+            // Area Under Path String
+            const areaPath = `${linePath} L${(paddingLeft + graphWidth).toFixed(1)},${(chartHeight - paddingBottom).toFixed(1)} L${paddingLeft.toFixed(1)},${(chartHeight - paddingBottom).toFixed(1)} Z`;
+
+            // SVG Gradient Definitions
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            defs.innerHTML = `
+                <linearGradient id="sandboxLineGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stop-color="#00b3ff" />
+                    <stop offset="50%" stop-color="#a855f7" />
+                    <stop offset="100%" stop-color="#00ff88" />
+                </linearGradient>
+                <linearGradient id="sandboxAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#00b3ff" stop-opacity="0.3" />
+                    <stop offset="100%" stop-color="#00b3ff" stop-opacity="0.0" />
+                </linearGradient>
+            `;
+            svg.appendChild(defs);
+
+            // Render Horizontal Gridlines
+            const gridLinesCount = 3;
+            for (let g = 0; g <= gridLinesCount; g++) {
+                const gridY = paddingTop + (g / gridLinesCount) * graphHeight;
+                const gridVal = maxBalance - (g / gridLinesCount) * maxBalance;
+                
+                // Draw Gridline
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', paddingLeft);
+                line.setAttribute('y1', gridY);
+                line.setAttribute('x2', chartWidth - paddingRight);
+                line.setAttribute('y2', gridY);
+                line.setAttribute('stroke', 'rgba(255,255,255,0.04)');
+                line.setAttribute('stroke-width', '1');
+                svg.appendChild(line);
+
+                // Draw Y-Axis Labels
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', paddingLeft - 8);
+                text.setAttribute('y', gridY + 4);
+                text.setAttribute('text-anchor', 'end');
+                text.setAttribute('fill', 'var(--text-muted)');
+                text.setAttribute('font-size', '8');
+                text.setAttribute('font-weight', '600');
+                text.textContent = this.abbreviateNumber(gridVal);
+                svg.appendChild(text);
+            }
+
+            // Render Horizontal FIRE Target Line
+            const targetY = chartHeight - paddingBottom - (fireTarget / maxBalance) * graphHeight;
+            const targetLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            targetLine.setAttribute('x1', paddingLeft);
+            targetLine.setAttribute('y1', targetY);
+            targetLine.setAttribute('x2', chartWidth - paddingRight);
+            targetLine.setAttribute('y2', targetY);
+            targetLine.setAttribute('stroke', 'rgba(255, 77, 109, 0.4)');
+            targetLine.setAttribute('stroke-width', '1.5');
+            targetLine.setAttribute('stroke-dasharray', '2 2');
+            svg.appendChild(targetLine);
+
+            const targetText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            targetText.setAttribute('x', chartWidth - paddingRight - 4);
+            targetText.setAttribute('y', targetY - 4);
+            targetText.setAttribute('text-anchor', 'end');
+            targetText.setAttribute('fill', '#ff4d6d');
+            targetText.setAttribute('font-size', '8');
+            targetText.setAttribute('font-weight', '700');
+            targetText.textContent = `FIRE: ${this.abbreviateNumber(fireTarget)}`;
+            svg.appendChild(targetText);
+
+            // Render Area path
+            const areaEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            areaEl.setAttribute('d', areaPath);
+            areaEl.setAttribute('class', 'sandbox-chart-area');
+            svg.appendChild(areaEl);
+
+            // Render Curve Line Path
+            const lineEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            lineEl.setAttribute('d', linePath);
+            lineEl.setAttribute('class', 'sandbox-chart-line');
+            svg.appendChild(lineEl);
+
+            // Render X-Axis Labels (Current Age, Middle Age, Future Age)
+            const agesToLabels = [
+                { val: projections[0].age, x: paddingLeft },
+                { val: projections[15].age, x: paddingLeft + graphWidth / 2 },
+                { val: projections[30].age, x: paddingLeft + graphWidth }
+            ];
+
+            agesToLabels.forEach(lbl => {
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', lbl.x);
+                text.setAttribute('y', chartHeight - paddingBottom + 16);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('fill', 'var(--text-muted)');
+                text.setAttribute('font-size', '8');
+                text.setAttribute('font-weight', '600');
+                text.textContent = `Age ${lbl.val}`;
+                svg.appendChild(text);
+            });
+
+            // Render Milestone markers if Target is met
+            if (fireYear !== null && fireYear <= 30) {
+                const milestoneX = paddingLeft + (fireYear / years) * graphWidth;
+                const milestoneY = chartHeight - paddingBottom - (fireTarget / maxBalance) * graphHeight;
+
+                // Vertical Line
+                const verticalLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                verticalLine.setAttribute('x1', milestoneX);
+                verticalLine.setAttribute('y1', milestoneY);
+                verticalLine.setAttribute('x2', milestoneX);
+                verticalLine.setAttribute('y2', chartHeight - paddingBottom);
+                verticalLine.setAttribute('class', 'sandbox-milestone-marker');
+                svg.appendChild(verticalLine);
+
+                // Glow pulsing circle
+                const glowRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                glowRing.setAttribute('cx', milestoneX);
+                glowRing.setAttribute('cy', milestoneY);
+                glowRing.setAttribute('r', '8');
+                glowRing.setAttribute('fill', 'rgba(255, 77, 109, 0.3)');
+                glowRing.setAttribute('class', 'sandbox-ring-pulse');
+                glowRing.setAttribute('transform-origin', `${milestoneX}px ${milestoneY}px`);
+                svg.appendChild(glowRing);
+
+                // Inner circle marker
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', milestoneX);
+                circle.setAttribute('cy', milestoneY);
+                circle.setAttribute('r', '4');
+                circle.setAttribute('fill', '#ff4d6d');
+                circle.setAttribute('stroke', '#fff');
+                circle.setAttribute('stroke-width', '1');
+                svg.appendChild(circle);
+
+                // Milestone year label above marker
+                const milestoneLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                milestoneLabel.setAttribute('x', milestoneX);
+                milestoneLabel.setAttribute('y', milestoneY - 12);
+                milestoneLabel.setAttribute('text-anchor', 'middle');
+                milestoneLabel.setAttribute('fill', '#ff4d6d');
+                milestoneLabel.setAttribute('font-size', '9');
+                milestoneLabel.setAttribute('font-weight', '800');
+                milestoneLabel.textContent = `Freedom: Age ${age + fireYear}`;
+                svg.appendChild(milestoneLabel);
+            }
+        }
+
+        // Render Verdict
+        const verdictTextEl = document.getElementById('sandbox-verdict-text');
+        const verdictCard = document.getElementById('sandbox-verdict-card');
+        if (verdictTextEl && verdictCard) {
+            if (fireYear !== null) {
+                const freedomAge = age + fireYear;
+                verdictCard.style.borderLeftColor = '#00ff88';
+                verdictTextEl.innerHTML = `
+                    🎉 <strong>Outstanding! Financial Freedom is within your grasp!</strong><br><br>
+                    At your current savings additions pace and asset compound rates, you will completely reach your target FIRE milestone of 
+                    <strong>${this.formatCurrency(fireTarget)}</strong> at <strong>Age ${freedomAge}</strong> (in exactly <strong>${fireYear} years</strong>).<br><br>
+                    • Starting Wealth Capital: <strong>${this.formatCurrency(startingCapital)}</strong><br>
+                    • Monthly savings discipline: <strong>${this.formatCurrency(monthlySavings)} / month</strong><br>
+                    • Expected yield performance: <strong>${annualYield}% / Year</strong><br><br>
+                    💡 <em>AI Tip:</em> Boosting your monthly savings by just <strong>$150/mo</strong> shifts your retirement freedom year forward by compounding even faster!
+                `;
+            } else {
+                // Not met in 30 years
+                verdictCard.style.borderLeftColor = '#ff4d6d';
+                verdictTextEl.innerHTML = `
+                    ⚠️ <strong>Adjustments Recommended: FIRE goal not reached within 30 years.</strong><br><br>
+                    At your current settings, your projected wealth compounded over 30 years will reach <strong>${this.formatCurrency(capital)}</strong>, which falls short of your target FIRE milestone of <strong>${this.formatCurrency(fireTarget)}</strong>.<br><br>
+                    <strong>Actionable paths to accelerate your timeline:</strong><br>
+                    1. <strong>Boost Savings Contributions:</strong> Try cutting secondary expenses by 15% to increase monthly savings additions.<br>
+                    2. <strong>Optimize Yield Allocations:</strong> Review asset categories in your Wealth Hub to see if you can safely reallocate capital to target a higher average yield.<br>
+                    3. <strong>Calibrate Goal Number:</strong> Adjust your retirement target FIRE number to a more accessible intermediate capital milestone.
+                `;
+            }
+        }
+    }
+
+    abbreviateNumber(num) {
+        if (num >= 1000000) return '$' + (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return '$' + (num / 1000).toFixed(0) + 'k';
+        return '$' + num.toFixed(0);
+    }
+
+    // ==========================================================================
+    // CSV Statement Importer & AI Auto-Categorizer
+    // ==========================================================================
+
+    initCSVImporter() {
+        const dropzone = document.getElementById('csv-dropzone');
+        const fileInput = document.getElementById('csv-file-input');
+        
+        if (!dropzone || !fileInput) return;
+
+        // Reset file input value
+        fileInput.value = '';
+
+        // Prevent defaults for drag-drop events
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+        });
+
+        // Add visual drag styling classes
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => {
+                dropzone.classList.add('dragging');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => {
+                dropzone.classList.remove('dragging');
+            }, false);
+        });
+
+        // Handle drop event
+        dropzone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files && files.length > 0) {
+                this.handleCSVFile(files[0]);
+            }
+        });
+
+        // Handle input change event (browse files)
+        fileInput.onchange = (e) => {
+            const files = e.target.files;
+            if (files && files.length > 0) {
+                this.handleCSVFile(files[0]);
+            }
+        };
+
+        if (window.lucide) lucide.createIcons();
+    }
+
+    handleCSVFile(file) {
+        if (!file.name.toLowerCase().endsWith('.csv')) {
+            this.showToast('Please upload a valid CSV file!', 'error');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const text = e.target.result;
+            this.parseCSVText(text);
+        };
+        reader.readAsText(file);
+    }
+
+    parseCSVText(text) {
+        const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
+        if (lines.length <= 1) {
+            this.showToast('CSV file is empty or missing data rows!', 'error');
+            return;
+        }
+
+        // Parse header (case insensitive index matching)
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        
+        const dateIdx = headers.indexOf('date');
+        const descIdx = headers.indexOf('description') !== -1 ? headers.indexOf('description') : (headers.indexOf('notes') !== -1 ? headers.indexOf('notes') : (headers.indexOf('note') !== -1 ? headers.indexOf('note') : -1));
+        const amountIdx = headers.indexOf('amount');
+        const typeIdx = headers.indexOf('type');
+
+        if (dateIdx === -1 || amountIdx === -1) {
+            this.showToast('CSV must contain at least "Date" and "Amount" headers!', 'error');
+            return;
+        }
+
+        this.stagingTransactions = [];
+
+        // Parse data rows
+        for (let i = 1; i < lines.length; i++) {
+            const row = this.parseCSVRow(lines[i]);
+            if (row.length < 2) continue;
+
+            const dateStr = row[dateIdx] || new Date().toISOString().split('T')[0];
+            const desc = descIdx !== -1 ? (row[descIdx] || 'Unspecified Merchant') : 'Unspecified Merchant';
+            const amount = parseFloat(row[amountIdx]) || 0;
+            let type = typeIdx !== -1 ? (row[typeIdx] || 'Expense') : (amount < 0 ? 'Expense' : 'Income');
+
+            // Sanitize type
+            if (type.toLowerCase().includes('inc') || type.toLowerCase().includes('in')) {
+                type = 'Income';
+            } else {
+                type = 'Expense';
+            }
+
+            const category = this.classifyDescription(desc, type);
+
+            this.stagingTransactions.push({
+                id: 'staging_' + Date.now() + '_' + i + '_' + Math.floor(Math.random() * 1000),
+                date: dateStr,
+                description: desc,
+                amount: Math.abs(amount),
+                type,
+                category
+            });
+        }
+
+        if (this.stagingTransactions.length === 0) {
+            this.showToast('No valid transactions parsed from CSV!', 'error');
+            return;
+        }
+
+        this.showToast(`Parsed ${this.stagingTransactions.length} records successfully! Reviewing AI Auto-Categorizations...`, 'success');
+        this.renderStagingLedger();
+    }
+
+    parseCSVRow(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                result.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        result.push(current.trim());
+        return result;
+    }
+
+    classifyDescription(desc, type) {
+        if (type === 'Income') {
+            const descLower = desc.toLowerCase();
+            if (descLower.includes('salary') || descLower.includes('payday') || descLower.includes('dividend') || descLower.includes('interest')) {
+                return 'Salary';
+            }
+            return 'Salary';
+        }
+
+        const descLower = desc.toLowerCase();
+        
+        const rules = [
+            { keywords: ['uber', 'lyft', 'taxi', 'fuel', 'gas', 'metro', 'train', 'flight', 'airline', 'careem', 'indrive', 'cab'], category: 'Transport' },
+            { keywords: ['whole foods', 'walmart', 'grocery', 'supermarket', 'starbucks', 'cafe', 'restaurant', 'mcdonald', 'kfc', 'food', 'pizza', 'burger', 'eats', 'swiggy', 'zomato', 'diner'], category: 'Food' },
+            { keywords: ['netflix', 'spotify', 'disney', 'prime', 'steam', 'playstation', 'xbox', 'cinema', 'theatre', 'club', 'movie', 'concert'], category: 'Entertainment' },
+            { keywords: ['apple', 'google', 'microsoft', 'aws', 'chatgpt', 'copilot', 'hosting', 'github', 'cpu', 'computer', 'software', 'gadget', 'tech'], category: 'Tech' },
+            { keywords: ['gym', 'internet', 'electricity', 'gas bill', 'bill', 'recurring', 'subscription', 'utility', 'cell', 'telecom', 'phone'], category: 'Bills' },
+            { keywords: ['rent', 'landlord', 'mortgage', 'housing', 'hotel', 'airbnb', 'maintenance', 'plumbing'], category: 'Housing' },
+            { keywords: ['repayment', 'loan', 'debt', 'lend', 'interest payment'], category: 'Debt' }
+        ];
+
+        for (const rule of rules) {
+            if (rule.keywords.some(k => descLower.includes(k))) {
+                if (this.categories[rule.category]) return rule.category;
+                const matchingKey = Object.keys(this.categories).find(k => k.toLowerCase() === rule.category.toLowerCase());
+                if (matchingKey) return matchingKey;
+            }
+        }
+
+        if (this.categories['Other']) return 'Other';
+        const keys = Object.keys(this.categories);
+        return keys.length > 0 ? keys[0] : 'Other';
+    }
+
+    renderStagingLedger() {
+        const body = document.getElementById('import-staging-body');
+        const container = document.getElementById('staging-grid-container');
+        const controls = document.getElementById('staging-controls');
+
+        if (!body || !container || !controls) return;
+
+        if (this.stagingTransactions.length === 0) {
+            container.style.display = 'none';
+            controls.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+        controls.style.display = 'flex';
+
+        const catOptions = Object.keys(this.categories).map(catName => {
+            return `<option value="${catName}">${catName}</option>`;
+        }).join('');
+
+        body.innerHTML = this.stagingTransactions.map((tx) => {
+            return `
+                <tr id="row-${tx.id}" style="border-bottom: 1px solid rgba(255, 255, 255, 0.03); transition: all 0.3s ease;">
+                    <td style="padding: 10px 8px;">
+                        <input type="date" class="staging-input" value="${tx.date}" onchange="window.app.updateStagingField('${tx.id}', 'date', this.value)">
+                    </td>
+                    <td style="padding: 10px 8px;">
+                        <input type="text" class="staging-input" value="${tx.description}" placeholder="Merchant details" onchange="window.app.updateStagingField('${tx.id}', 'description', this.value)">
+                    </td>
+                    <td style="padding: 10px 8px;">
+                        <input type="number" step="0.01" class="staging-input" value="${tx.amount}" placeholder="0.00" onchange="window.app.updateStagingField('${tx.id}', 'amount', this.value)">
+                    </td>
+                    <td style="padding: 10px 8px;">
+                        <select class="staging-select" onchange="window.app.updateStagingField('${tx.id}', 'type', this.value); window.app.reclassifyStagingRow('${tx.id}')">
+                            <option value="Expense" ${tx.type === 'Expense' ? 'selected' : ''}>Expense</option>
+                            <option value="Income" ${tx.type === 'Income' ? 'selected' : ''}>Income</option>
+                        </select>
+                    </td>
+                    <td style="padding: 10px 8px;">
+                        <select class="staging-select" id="cat-select-${tx.id}" onchange="window.app.updateStagingField('${tx.id}', 'category', this.value)">
+                            ${catOptions}
+                        </select>
+                    </td>
+                    <td style="padding: 10px 8px; text-align: center;">
+                        <button class="btn-delete-row" onclick="window.app.deleteStagingRow('${tx.id}')" title="Delete Staging Row">
+                            <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        this.stagingTransactions.forEach(tx => {
+            const dropdown = document.getElementById(`cat-select-${tx.id}`);
+            if (dropdown) dropdown.value = tx.category;
+        });
+
+        if (window.lucide) lucide.createIcons();
+    }
+
+    updateStagingField(id, field, value) {
+        const tx = this.stagingTransactions.find(t => t.id === id);
+        if (!tx) return;
+
+        if (field === 'amount') {
+            tx.amount = parseFloat(value) || 0;
+        } else {
+            tx[field] = value;
+        }
+    }
+
+    reclassifyStagingRow(id) {
+        const tx = this.stagingTransactions.find(t => t.id === id);
+        if (!tx) return;
+
+        tx.category = this.classifyDescription(tx.description, tx.type);
+        const dropdown = document.getElementById(`cat-select-${id}`);
+        if (dropdown) dropdown.value = tx.category;
+    }
+
+    deleteStagingRow(id) {
+        const rowEl = document.getElementById(`row-${id}`);
+        if (rowEl) {
+            rowEl.style.opacity = '0';
+            rowEl.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                this.stagingTransactions = this.stagingTransactions.filter(t => t.id !== id);
+                this.renderStagingLedger();
+            }, 300);
+        }
+    }
+
+    addStagingRow() {
+        const defaultCat = Object.keys(this.categories)[0] || 'Other';
+        const newRow = {
+            id: 'staging_' + Date.now() + '_new_' + Math.floor(Math.random() * 1000),
+            date: new Date().toISOString().split('T')[0],
+            description: 'New Transaction',
+            amount: 0.00,
+            type: 'Expense',
+            category: defaultCat
+        };
+
+        this.stagingTransactions.push(newRow);
+        this.renderStagingLedger();
+        this.showToast('Added a new blank row to staging!', 'info');
+    }
+
+    clearStaging() {
+        this.stagingTransactions = [];
+        this.renderStagingLedger();
+        this.showToast('Discarded the staging workspace.', 'info');
+    }
+
+    importStagingLedger() {
+        if (this.stagingTransactions.length === 0) return;
+
+        for (const tx of this.stagingTransactions) {
+            if (!tx.date) {
+                this.showToast(`Row with description "${tx.description}" has no date!`, 'error');
+                return;
+            }
+            if (tx.amount <= 0) {
+                this.showToast(`Row with description "${tx.description}" must have an amount greater than 0!`, 'error');
+                return;
+            }
+        }
+
+        this.stagingTransactions.forEach(tx => {
+            const finalTx = {
+                id: ++this.lastTransactionId,
+                type: tx.type,
+                category: tx.category,
+                amount: tx.amount,
+                date: tx.date,
+                note: tx.description
+            };
+            this.transactions.push(finalTx);
+        });
+
+        this.reindexTransactions();
+
+        this.logAction('IMPORT', `${this.stagingTransactions.length} Transactions`, `Imported Statement containing ${this.stagingTransactions.length} records parsed from CSV.`);
+
+        if (!this.quests) this.quests = { envelopeMaster: false, saverKnight: false, billDestroyer: false, frugalCount: 0 };
+        this.quests.frugalCount += this.stagingTransactions.length;
+
+        this.saveToLocal();
+        this.saveToCloud();
+        this.updateUI();
+
+        const importCount = this.stagingTransactions.length;
+        this.stagingTransactions = [];
+        this.renderStagingLedger();
+
+        this.showToast(`🎉 Superb! Imported ${importCount} statement entries directly into your secure vault!`, 'success');
+        
+        setTimeout(() => {
+            this.switchView('dashboard');
+        }, 800);
+    }
+
+    downloadSampleCSV() {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        
+        const sampleCSV = `Date,Description,Amount,Type
+${yyyy}-${mm}-02,Uber Cab Rider,250,Expense
+${yyyy}-${mm}-05,Whole Foods Store,1500,Expense
+${yyyy}-${mm}-10,Monthly Salary pay,25000,Income
+${yyyy}-${mm}-12,Netflix Video Premium,450,Expense
+${yyyy}-${mm}-15,Planet Fitness Gym,300,Expense`;
+
+        const blob = new Blob([sampleCSV], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", "spendwise_sample_statement.csv");
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        this.showToast('Downloaded spendwise_sample_statement.csv helper! Upload it in the portal.', 'success');
     }
 
 }
