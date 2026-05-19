@@ -789,8 +789,8 @@
                             </div>
                             <div style="display: flex; gap: 12px;">
                                 <div style="flex: 1;">
-                                    <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">Total Cost Amount</label>
-                                    <input type="number" id="split-amount" placeholder="0" required min="1" step="any" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); color: var(--text-main); font-size: 0.85rem;">
+                                    <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">Total Cost Amount <span id="split-calc-result" class="calc-badge"></span></label>
+                                    <input type="text" id="split-amount" placeholder="e.g. 1500+2500" required style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); color: var(--text-main); font-size: 0.85rem;">
                                 </div>
                                 <div style="flex: 1;">
                                     <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">Category Envelope</label>
@@ -827,6 +827,39 @@
                     <h3 style="margin-bottom: 1rem; color: var(--text-main); font-weight: 600; font-size: 1.05rem;">Split Group Expenses Summary</h3>
                     <div class="shared-split-grid" id="shared-split-ledger">
                         <!-- Dynamic split cards -->
+                    </div>
+                </div>
+
+                <!-- Debt Settlement & Minimization Panel -->
+                <div class="glass" style="padding: 1.5rem; border-radius: 18px; margin-top: 1.5rem;">
+                    <div class="chart-header" style="margin-bottom: 1.25rem; display: flex; flex-direction: column; align-items: flex-start; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.75rem;">
+                        <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="shuffle" style="width: 20px; height: 20px; color: var(--primary);"></i>
+                            Smart Debt Settlement Simplifier
+                        </h3>
+                        <p class="text-muted" style="font-size: 0.85rem; margin: 0.25rem 0 0 0;">Greedy algorithm calculating the minimum number of P2P money transfers to settle all shared bills</p>
+                    </div>
+                    
+                    <div class="settlement-results-grid" style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 20px;">
+                        <!-- Left Side: Balances Table -->
+                        <div class="glass" style="padding: 1.25rem; border-radius: 12px; background: rgba(255,255,255,0.01);">
+                            <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                                <i data-lucide="scale" style="width: 16px; height: 16px; color: #00ff88;"></i> Net Balances
+                            </h4>
+                            <div id="settlement-balances-list" style="display: flex; flex-direction: column; gap: 8px;">
+                                <!-- Dynamically populated net balances of each participant -->
+                            </div>
+                        </div>
+
+                        <!-- Right Side: Simplified Payments -->
+                        <div class="glass" style="padding: 1.25rem; border-radius: 12px; background: rgba(255,255,255,0.01);">
+                            <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                                <i data-lucide="arrow-right-left" style="width: 16px; height: 16px; color: var(--primary);"></i> Suggested Settlement Plan
+                            </h4>
+                            <div id="settlement-transfers-list" style="display: flex; flex-direction: column; gap: 8px;">
+                                <!-- Dynamically populated minimized payments -->
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -890,6 +923,29 @@
                         <div class="top-categories-list" id="top-categories-list">
                             <!-- Loaded dynamically -->
                         </div>
+                    </div>
+                </div>
+
+                <!-- Spending Heatmap Section -->
+                <div class="glass spend-heatmap-section" style="margin-top: 1.5rem; padding: 1.5rem; border-radius: 18px;">
+                    <div class="chart-header" style="margin-bottom: 1.25rem; display: flex; flex-direction: column; align-items: flex-start; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.75rem;">
+                        <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="calendar" style="width: 20px; height: 20px; color: var(--primary);"></i>
+                            Monthly Spending Heatmap
+                        </h3>
+                        <p class="text-muted" style="font-size: 0.85rem; margin: 0.25rem 0 0 0;">Visualizing daily spending intensity patterns across this month</p>
+                    </div>
+                    <div class="heatmap-grid" id="spend-heatmap-grid">
+                        <!-- Dynamically generated visual tiles -->
+                    </div>
+                    <div class="heatmap-legend" style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 1rem; font-size: 0.8rem; color: var(--text-muted);">
+                        <span>Less Spend</span>
+                        <div class="legend-tile" style="background: rgba(255, 255, 255, 0.05); width: 14px; height: 14px; border-radius: 3px;"></div>
+                        <div class="legend-tile" style="background: rgba(0, 229, 255, 0.2); width: 14px; height: 14px; border-radius: 3px;"></div>
+                        <div class="legend-tile" style="background: rgba(0, 229, 255, 0.5); width: 14px; height: 14px; border-radius: 3px;"></div>
+                        <div class="legend-tile" style="background: rgba(255, 77, 109, 0.6); width: 14px; height: 14px; border-radius: 3px;"></div>
+                        <div class="legend-tile" style="background: rgba(255, 77, 109, 1); width: 14px; height: 14px; border-radius: 3px; box-shadow: 0 0 8px rgba(255, 77, 109, 0.6);"></div>
+                        <span>Peak Spend</span>
                     </div>
                 </div>
 
@@ -1364,8 +1420,8 @@
             </div>
             <form id="budget-form">
                 <div class="form-group">
-                    <label for="budget-amount">Budget Goal (PKR)</label>
-                    <input type="number" id="budget-amount" placeholder="e.g. 50000" required>
+                    <label for="budget-amount">Budget Goal (PKR) <span id="budget-calc-result" class="calc-badge"></span></label>
+                    <input type="text" id="budget-amount" placeholder="e.g. 50000" required>
                 </div>
                 <button type="submit" class="btn-submit">Save Budget</button>
             </form>
@@ -1528,12 +1584,12 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="goal-target">Target Savings Milestone</label>
-                        <input type="number" id="goal-target" min="1" step="any" placeholder="e.g. 50000" required>
+                        <label for="goal-target">Target Savings Milestone <span id="goal-target-calc-result" class="calc-badge"></span></label>
+                        <input type="text" id="goal-target" placeholder="e.g. 50000" required>
                     </div>
                     <div class="form-group">
-                        <label for="goal-current">Starting Coins Earmarked (Optional)</label>
-                        <input type="number" id="goal-current" min="0" step="any" placeholder="e.g. 0" value="0">
+                        <label for="goal-current">Starting Coins Earmarked (Optional) <span id="goal-current-calc-result" class="calc-badge"></span></label>
+                        <input type="text" id="goal-current" placeholder="e.g. 0" value="0">
                     </div>
                 </div>
                 <div class="form-row">
@@ -1582,8 +1638,8 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="goal-allocate-amount">Amount to Move</label>
-                    <input type="number" id="goal-allocate-amount" min="0.01" step="any" placeholder="Enter amount..." required>
+                    <label for="goal-allocate-amount">Amount to Move <span id="goal-allocate-calc-result" class="calc-badge"></span></label>
+                    <input type="text" id="goal-allocate-amount" placeholder="Enter amount..." required>
                 </div>
                 <button type="submit" class="btn-submit">Execute Transaction</button>
             </form>
@@ -1719,6 +1775,10 @@
             <button class="chip-btn" data-query="budget">🍔 Food Pace</button>
             <button class="chip-btn" data-query="anomalies">📈 Peak Spend</button>
             <button class="chip-btn" data-query="tips">💡 Saving Tips</button>
+            <button class="chip-btn" data-query="settlements">🤝 Settlements</button>
+            <button class="chip-btn" data-query="networth">💎 Net Worth</button>
+            <button class="chip-btn" data-query="bills">📅 Unpaid Bills</button>
+            <button class="chip-btn" data-query="quests">🏆 Active Quests</button>
         </div>
 
         <!-- Chat Input Form -->

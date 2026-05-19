@@ -601,27 +601,13 @@ class SpendWise {
             this.sortByEl.addEventListener('change', () => this.renderFullTransactions());
         }
 
-        // Smart Calculator Listener
-        const amountInput = document.getElementById('amount');
-        const calcResult = document.getElementById('calc-result');
-        amountInput.addEventListener('input', (e) => {
-            const val = e.target.value;
-            if (/[+\-*/]/.test(val)) {
-                try {
-                    // Safe evaluation of simple math
-                    const result = Function(`'use strict'; return (${val})`)();
-                    if (!isNaN(result) && isFinite(result)) {
-                        calcResult.textContent = `= ${this.formatCurrency(result)}`;
-                    } else {
-                        calcResult.textContent = '';
-                    }
-                } catch {
-                    calcResult.textContent = '';
-                }
-            } else {
-                calcResult.textContent = '';
-            }
-        });
+        // Smart Calculator Listeners for Core Numeric Inputs
+        this.registerMathEvaluator('amount', 'calc-result');
+        this.registerMathEvaluator('budget-amount', 'budget-calc-result');
+        this.registerMathEvaluator('goal-target', 'goal-target-calc-result');
+        this.registerMathEvaluator('goal-current', 'goal-current-calc-result');
+        this.registerMathEvaluator('goal-allocate-amount', 'goal-allocate-calc-result');
+        this.registerMathEvaluator('split-amount', 'split-calc-result');
 
         // Icon Picker Events
         document.getElementById('open-icon-picker').addEventListener('click', () => {
@@ -768,6 +754,10 @@ class SpendWise {
                 if (isOpen) {
                     const msgContainer = document.getElementById('ai-coach-messages');
                     if (msgContainer) msgContainer.scrollTop = msgContainer.scrollHeight;
+                    
+                    const chipsContainer = document.querySelector('.ai-coach-chips');
+                    if (chipsContainer) chipsContainer.scrollLeft = 0;
+
                     if (coachInput) coachInput.focus();
                 }
             });
@@ -1187,6 +1177,7 @@ class SpendWise {
         this.renderAuditLog(); // Ensure Audit Log is refreshed
         this.updateCharts(monthlyData);
         this.renderExtendedAnalytics(monthlyData);
+        this.renderSpendHeatmap();
         this.renderCategoryBudgets();
         this.renderGoals();
 
@@ -1211,6 +1202,7 @@ class SpendWise {
     }
 
     switchView(viewName) {
+        this.playAudio('click');
         this.toggleSidebar(false); // Auto-close mobile sidebar upon navigation
 
         this.navLinks.forEach(link => link.classList.toggle('active', link.id === `nav-${viewName}`));
@@ -1592,8 +1584,8 @@ class SpendWise {
         e.preventDefault();
         
         const title = document.getElementById('goal-title').value.trim();
-        const target = parseFloat(document.getElementById('goal-target').value) || 0;
-        const current = parseFloat(document.getElementById('goal-current').value) || 0;
+        const target = this.parseMathInput(document.getElementById('goal-target').value) || 0;
+        const current = this.parseMathInput(document.getElementById('goal-current').value) || 0;
         const color = document.getElementById('goal-color').value;
         const deadline = document.getElementById('goal-deadline').value;
         const icon = document.getElementById('goal-icon').value.trim() || 'piggy-bank';
@@ -1674,6 +1666,7 @@ class SpendWise {
 
         this.confirmDialog(`Are you sure you want to dismiss "${goal.title}"? Any saved coins will be returned to your general Cash in Hand.`, 'trash-2').then(ok => {
             if (ok) {
+                this.playAudio('shatter');
                 this.logAction('DELETE', `Gullak: ${goal.title}`, `Dismissed Gullak and released ${this.formatCurrency(goal.current)} back to general liquidity.`);
                 this.goals = this.goals.filter(g => g.id !== id);
                 
@@ -1698,6 +1691,7 @@ class SpendWise {
     }
 
     triggerCoinDrop(id) {
+        this.playAudio('coin');
         const coin = document.getElementById('coin-' + id);
         const sparkle = document.getElementById('sparkle-' + id);
         
@@ -1803,7 +1797,7 @@ class SpendWise {
         if (!goal) return;
 
         const type = document.getElementById('goal-allocate-type').value;
-        const amount = parseFloat(document.getElementById('goal-allocate-amount').value) || 0;
+        const amount = this.parseMathInput(document.getElementById('goal-allocate-amount').value) || 0;
 
         if (amount <= 0) {
             this.showToast('Please enter a valid amount greater than 0.', 'error');
@@ -2299,6 +2293,7 @@ class SpendWise {
     }
 
     toggleModal(modal, show) {
+        this.playAudio('click');
         modal.style.display = show ? 'flex' : 'none';
         if (show && modal === this.expenseModal && !this.editingId) document.getElementById('date').valueAsDate = new Date();
     }
@@ -2372,6 +2367,7 @@ class SpendWise {
             this.showToast('Transaction added!', 'success');
         }
 
+        this.playAudio('chime');
         this.saveToLocal();
         this.saveToCloud(); // FORCE IMMEDIATE CLOUD PUSH
         this.updateUI();
@@ -2415,7 +2411,7 @@ class SpendWise {
 
     handleSetBudget(e) {
         e.preventDefault();
-        const budgetVal = parseFloat(document.getElementById('budget-amount').value);
+        const budgetVal = this.parseMathInput(document.getElementById('budget-amount').value);
         this.budget = budgetVal;
         this.setLocal('monthlyBudget', this.budget);
         this.updateUI();
@@ -2733,6 +2729,45 @@ class SpendWise {
         const currency = this.settings?.currency || 'USD';
         // Use 'en-US' locale as a stable base to ensure the currency symbol is reliably rendered
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, minimumFractionDigits: 0 }).format(amount);
+    }
+
+    registerMathEvaluator(inputId, resultId) {
+        const input = document.getElementById(inputId);
+        const calcResult = document.getElementById(resultId);
+        if (!input || !calcResult) return;
+
+        input.addEventListener('input', (e) => {
+            const val = e.target.value;
+            if (/[+\-*/]/.test(val)) {
+                try {
+                    const clean = val.replace(/[^0-9+\-*/().\s]/g, '');
+                    const result = Function(`'use strict'; return (${clean})`)();
+                    if (result !== undefined && !isNaN(result) && isFinite(result)) {
+                        calcResult.textContent = `= ${this.formatCurrency(result)}`;
+                        calcResult.style.opacity = '1';
+                    } else {
+                        calcResult.textContent = '';
+                    }
+                } catch {
+                    calcResult.textContent = '';
+                }
+            } else {
+                calcResult.textContent = '';
+            }
+        });
+    }
+
+    parseMathInput(val) {
+        try {
+            if (/[+\-*/]/.test(val)) {
+                const clean = val.replace(/[^0-9+\-*/().\s]/g, '');
+                const result = Function(`'use strict'; return (${clean})`)();
+                return result !== undefined && !isNaN(result) && isFinite(result) ? result : parseFloat(val) || 0;
+            }
+            return parseFloat(val) || 0;
+        } catch {
+            return parseFloat(val) || 0;
+        }
     }
 
     // --- Export Logic ---
@@ -4686,8 +4721,6 @@ class SpendWise {
             }
         }
 
-        // Re-trigger Lucide icons to render actions icons beautifully
-        if (window.lucide) window.lucide.createIcons();
     }
 
     handleWealthSubmit(e) {
@@ -5167,13 +5200,169 @@ class SpendWise {
             }
         }
 
+        // --- Multi-party Greedy Debt Settlement Simplifier Algorithm ---
+        const balances = {}; 
+        balances['You'] = 0;
+
+        // 1. Scan split bills
+        const activeSplits = (this.sharedWallets || []).filter(s => s.status === 'Pending');
+        activeSplits.forEach(split => {
+            const amount = parseFloat(split.totalCost) || 0;
+            const share = amount / (split.members.length + 1);
+            
+            split.members.forEach(member => {
+                if (!balances[member]) balances[member] = 0;
+                balances[member] -= share; // Member owes money
+                balances['You'] += share;  // You are owed money
+            });
+        });
+
+        // 2. Scan Lend/Borrow transactions to construct Unified Net Balances
+        this.transactions.forEach(t => {
+            if (!t.person) return;
+            const person = t.person.trim();
+            if (!person) return;
+            if (!balances[person]) balances[person] = 0;
+
+            const amt = parseFloat(t.amount) || 0;
+            if (t.type === 'Lend') {
+                balances[person] -= amt; // They owe you
+                balances['You'] += amt;
+            } else if (t.type === 'Repay') {
+                balances[person] += amt; // They paid back
+                balances['You'] -= amt;
+            } else if (t.type === 'Borrow') {
+                balances[person] += amt; // You owe them
+                balances['You'] -= amt;
+            } else if (t.type === 'Payback') {
+                balances[person] -= amt; // You paid them back
+                balances['You'] += amt;
+            }
+        });
+
+        // Separate creditors and debtors
+        const creditors = [];
+        const debtors = [];
+
+        Object.keys(balances).forEach(name => {
+            const bal = parseFloat(balances[name].toFixed(2));
+            if (bal > 0.01) {
+                creditors.push({ name, amount: bal });
+            } else if (bal < -0.01) {
+                debtors.push({ name, amount: -bal }); 
+            }
+        });
+
+        // Sort descending to solve largest amounts first (Greedy choice)
+        creditors.sort((a, b) => b.amount - a.amount);
+        debtors.sort((a, b) => b.amount - a.amount);
+
+        const transfers = [];
+        let cIdx = 0;
+        let dIdx = 0;
+
+        while (cIdx < creditors.length && dIdx < debtors.length) {
+            const creditor = creditors[cIdx];
+            const debtor = debtors[dIdx];
+
+            const settledAmount = Math.min(creditor.amount, debtor.amount);
+            
+            transfers.push({
+                from: debtor.name,
+                to: creditor.name,
+                amount: parseFloat(settledAmount.toFixed(2))
+            });
+
+            creditor.amount -= settledAmount;
+            debtor.amount -= settledAmount;
+
+            if (creditor.amount < 0.02) {
+                cIdx++;
+            }
+            if (debtor.amount < 0.02) {
+                dIdx++;
+            }
+        }
+
+        // Render net balances
+        const balancesList = document.getElementById('settlement-balances-list');
+        if (balancesList) {
+            balancesList.innerHTML = '';
+            Object.keys(balances).forEach(name => {
+                const bal = balances[name];
+                if (Math.abs(bal) < 0.01) return; 
+                
+                const card = document.createElement('div');
+                card.style.display = 'flex';
+                card.style.justifyContent = 'space-between';
+                card.style.alignItems = 'center';
+                card.style.padding = '8px 12px';
+                card.style.borderRadius = '8px';
+                card.style.background = bal > 0 ? 'rgba(0, 255, 136, 0.05)' : 'rgba(255, 77, 109, 0.05)';
+                card.style.border = bal > 0 ? '1px solid rgba(0, 255, 136, 0.15)' : '1px solid rgba(255, 77, 109, 0.15)';
+
+                card.innerHTML = `
+                    <span style="font-weight: 600; color: var(--text-main);">${name}</span>
+                    <span style="font-weight: 700; color: ${bal > 0 ? '#00ff88' : '#ff4d6d'};">
+                        ${bal > 0 ? '+' : ''}${this.formatCurrency(bal)}
+                    </span>
+                `;
+                balancesList.appendChild(card);
+            });
+
+            if (balancesList.children.length === 0) {
+                balancesList.innerHTML = `
+                    <p style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 1.5rem 0;">
+                        <i data-lucide="smile" style="width: 24px; height: 24px; opacity: 0.5; margin-bottom: 4px; display: inline-block;"></i><br>
+                        All balances are perfectly settled!
+                    </p>
+                `;
+            }
+        }
+
+        // Render suggested transfers
+        const transfersList = document.getElementById('settlement-transfers-list');
+        if (transfersList) {
+            transfersList.innerHTML = '';
+            transfers.forEach(t => {
+                const card = document.createElement('div');
+                card.style.display = 'flex';
+                card.style.justifyContent = 'space-between';
+                card.style.alignItems = 'center';
+                card.style.padding = '10px 14px';
+                card.style.borderRadius = '8px';
+                card.style.background = 'rgba(255,255,255,0.02)';
+                card.style.border = '1px solid var(--glass-border)';
+
+                card.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-main);">
+                        <strong style="color: #ff4d6d;">${t.from}</strong> 
+                        <i data-lucide="arrow-right" style="width: 14px; height: 14px; color: var(--text-muted);"></i> 
+                        <strong style="color: #00ff88;">${t.to}</strong>
+                    </div>
+                    <span style="font-weight: 700; color: var(--primary); font-size: 0.9rem;">
+                        ${this.formatCurrency(t.amount)}
+                    </span>
+                `;
+                transfersList.appendChild(card);
+            });
+
+            if (transfers.length === 0) {
+                transfersList.innerHTML = `
+                    <p style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 1.5rem 0;">
+                        No pending transfers required.
+                    </p>
+                `;
+            }
+        }
+
         if (window.lucide) window.lucide.createIcons();
     }
 
     handleBillSplit(e) {
         e.preventDefault();
         const title = document.getElementById('split-title').value;
-        const amount = parseFloat(document.getElementById('split-amount').value);
+        const amount = this.parseMathInput(document.getElementById('split-amount').value);
         const category = document.getElementById('split-category').value;
         const membersStr = document.getElementById('split-members').value;
 
@@ -5321,6 +5510,10 @@ class SpendWise {
         else if (queryType === 'budget') userText = "🍔 Analyze Food category spending pace";
         else if (queryType === 'anomalies') userText = "📈 Scan for my peak spending transaction";
         else if (queryType === 'tips') userText = "💡 Generate custom saving advice";
+        else if (queryType === 'settlements') userText = "🤝 Show simplified group debt settlement plan";
+        else if (queryType === 'networth') userText = "💎 Analyze my Net Worth & Wealth Portfolio";
+        else if (queryType === 'bills') userText = "📅 List upcoming subscriptions and unpaid bills";
+        else if (queryType === 'quests') userText = "🏆 View active SpendWise Quest progress";
 
         this.renderCoachMessage(userText, 'user');
 
@@ -5443,6 +5636,142 @@ class SpendWise {
             tipResponse += `3. **Daily Pacing Check:** Glance at your new *Safe Spending* card on the dashboard to ensure you stay below your day-by-day average cap.`;
 
             return tipResponse;
+        }
+
+        // 4b. SCENARIO: P2P Debt Settlements Query
+        if (cleanInput.includes('settlement') || cleanInput.includes('owes') || cleanInput.includes('split') || cleanInput.includes('lend') || cleanInput.includes('borrow')) {
+            const balances = {}; 
+            balances['You'] = 0;
+
+            const activeSplits = (this.sharedWallets || []).filter(s => s.status === 'Pending');
+            activeSplits.forEach(split => {
+                const amount = parseFloat(split.totalCost) || 0;
+                const share = amount / (split.members.length + 1);
+                split.members.forEach(member => {
+                    if (!balances[member]) balances[member] = 0;
+                    balances[member] -= share;
+                    balances['You'] += share;
+                });
+            });
+
+            this.transactions.forEach(t => {
+                if (!t.person) return;
+                const person = t.person.trim();
+                if (!person) return;
+                if (!balances[person]) balances[person] = 0;
+
+                const amt = parseFloat(t.amount) || 0;
+                if (t.type === 'Lend') {
+                    balances[person] -= amt;
+                    balances['You'] += amt;
+                } else if (t.type === 'Repay') {
+                    balances[person] += amt;
+                    balances['You'] -= amt;
+                } else if (t.type === 'Borrow') {
+                    balances[person] += amt;
+                    balances['You'] -= amt;
+                } else if (t.type === 'Payback') {
+                    balances[person] -= amt;
+                    balances['You'] += amt;
+                }
+            });
+
+            const creditors = [];
+            const debtors = [];
+            Object.keys(balances).forEach(name => {
+                const bal = parseFloat(balances[name].toFixed(2));
+                if (name === 'You') return;
+                if (bal > 0.01) {
+                    creditors.push(`• **${name}** owes you **` + this.formatCurrency(bal) + `**`);
+                } else if (bal < -0.01) {
+                    debtors.push(`• You owe **${name}** **` + this.formatCurrency(-bal) + `**`);
+                }
+            });
+
+            let response = "🤝 **P2P Group Debt Settlement Summary:**\n\n";
+            if (creditors.length === 0 && debtors.length === 0) {
+                return "🤝 All balances are perfectly settled! You don't have any pending group splits or active lent/borrowed cash in your vault.";
+            }
+
+            if (creditors.length > 0) {
+                response += `💸 **Outstanding Collections:**\n${creditors.join('\n')}\n\n`;
+            }
+            if (debtors.length > 0) {
+                response += `⚠️ **Outstanding Payments:**\n${debtors.join('\n')}\n\n`;
+            }
+            
+            response += `💡 *Settlement Advice:* Use the P2P Debt Settlement solver inside the **Shared Wallets** tab to view your minimized step-by-step payment paths!`;
+            return response;
+        }
+
+        // 4c. SCENARIO: Net Worth & Wealth Portfolio Query
+        if (cleanInput.includes('networth') || cleanInput.includes('wealth') || cleanInput.includes('portfolio') || cleanInput.includes('asset')) {
+            const assetTotal = (this.assets || []).reduce((sum, a) => sum + (parseFloat(a.qty) * parseFloat(a.currentPrice) || 0), 0);
+            const netWorth = this.cashInHand + assetTotal;
+
+            let response = `💎 **Your Net Worth & Assets Analysis:**\n\n`;
+            response += `• **Liquid Cash:** ` + this.formatCurrency(this.cashInHand) + `\n`;
+            response += `• **Investments & Assets:** ` + this.formatCurrency(assetTotal) + `\n`;
+            response += `• 🌟 **Total Net Worth:** **` + this.formatCurrency(netWorth) + `**\n\n`;
+
+            if (this.assets && this.assets.length > 0) {
+                response += `📈 **Wealth Allocation Breakdown:**\n`;
+                this.assets.forEach(a => {
+                    const val = a.qty * a.currentPrice;
+                    const pct = ((val / (netWorth || 1)) * 100).toFixed(0);
+                    response += `• **${a.name}** (${a.type}): ` + this.formatCurrency(val) + ` (${pct}% of wealth)\n`;
+                });
+            } else {
+                response += `💡 *Tip:* You haven't added any premium investment portfolios. Navigate to the **Wealth Hub** to trace gold, crypto, or stocks in real time!`;
+            }
+            return response;
+        }
+
+        // 4d. SCENARIO: Subscriptions & Bills Query
+        if (cleanInput.includes('bill') || cleanInput.includes('subscription') || cleanInput.includes('due') || cleanInput.includes('unpaid')) {
+            const subs = this.subscriptions || [];
+            if (subs.length === 0) {
+                return "📅 **Subscriptions & Bills:**\n\nYou currently have no active recurring bills or monthly subscriptions. Set them up inside the **Bills Planner** to get automatic safety burn predictions!";
+            }
+
+            let unpaidTotal = 0;
+            const unpaidList = [];
+            subs.forEach(s => {
+                const hasPaid = this.hasPaidSubscriptionThisMonth(s.id);
+                if (!hasPaid) {
+                    unpaidTotal += parseFloat(s.cost || 0);
+                    unpaidList.push(`• **${s.name}** (${s.category}): ` + this.formatCurrency(s.cost) + ` due on day ${s.dueDate}`);
+                }
+            });
+
+            let response = `📅 **Subscriptions & Recurring Bills Status:**\n\n`;
+            if (unpaidList.length === 0) {
+                response += `✨ Beautiful! All **${subs.length}** recurring subscriptions and monthly bills have been fully paid off this month!`;
+            } else {
+                response += `⚠️ You have **${unpaidList.length}** unpaid bills outstanding, totaling **` + this.formatCurrency(unpaidTotal) + `**:\n`;
+                response += unpaidList.join('\n') + `\n\n`;
+                response += `💡 *Important:* Make sure to pay these bills so your safe-spending balances stay accurate!`;
+            }
+            return response;
+        }
+
+        // 4e. SCENARIO: Quests & Achievements Query
+        if (cleanInput.includes('quest') || cleanInput.includes('badge') || cleanInput.includes('achievement')) {
+            const q = this.quests || { envelopeMaster: false, saverKnight: false, billDestroyer: false, frugalCount: 0 };
+            
+            let response = `🏆 **SpendWise Quest & Accomplishments Tracker:**\n\n`;
+            response += `• **Envelope Master Badge:** ${q.envelopeMaster ? '✅ Achieved! (Budgets secure)' : '❌ Incomplete (Adjust your envelope caps)'}\n`;
+            response += `• **Saver Knight Badge:** ${q.saverKnight ? '✅ Achieved! (Savings active)' : '❌ Incomplete (Reach a goal target)'}\n`;
+            response += `• **Bill Destroyer Badge:** ${q.billDestroyer ? '✅ Achieved! (Paid subscription bills)' : '❌ Incomplete (Reconcile outstanding bills)'}\n`;
+            response += `• **Parsed Statements:** Saved **${q.frugalCount || 0}** transactions via smart CSV uploads.\n\n`;
+
+            const completed = [q.envelopeMaster, q.saverKnight, q.billDestroyer].filter(Boolean).length;
+            if (completed === 3) {
+                response += `🏅 **Incredible!** You are a certified *SpendWise Grandmaster*! You have fully unlocked all premium visual accomplishments. Keep it up!`;
+            } else {
+                response += `💡 *Quest Advice:* Complete more actions across the app to unlock all achievements and level up your financial score!`;
+            }
+            return response;
         }
 
         // 5. DEFAULT FALLBACK RESPONSES
@@ -6094,6 +6423,203 @@ ${yyyy}-${mm}-15,Planet Fitness Gym,300,Expense`;
         link.click();
         document.body.removeChild(link);
         this.showToast('Downloaded spendwise_sample_statement.csv helper! Upload it in the portal.', 'success');
+    }
+
+    renderSpendHeatmap() {
+        const grid = document.getElementById('spend-heatmap-grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+
+        // Get selected month/year
+        const monthSelector = document.getElementById('global-month-selector');
+        let selectedYear = new Date().getFullYear();
+        let selectedMonth = new Date().getMonth(); // 0-indexed
+        if (monthSelector && monthSelector.value) {
+            const [selMonth, selYear] = monthSelector.value.split(' ');
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            const selMonthIdx = monthNames.indexOf(selMonth);
+            if (selMonthIdx !== -1) {
+                selectedMonth = selMonthIdx;
+                selectedYear = parseInt(selYear);
+            }
+        }
+
+        const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+        
+        // Accumulate expenses per day
+        const dailySpends = {};
+        for (let i = 1; i <= daysInMonth; i++) {
+            dailySpends[i] = 0;
+        }
+
+        const targetMonthStr = `${selectedYear}-${(selectedMonth + 1).toString().padStart(2, '0')}`;
+        
+        this.transactions.forEach(t => {
+            if (t.date && t.date.startsWith(targetMonthStr)) {
+                const isOut = ['Expense', 'Lend', 'Payback'].includes(t.type);
+                if (isOut) {
+                    const day = parseInt(t.date.split('-')[2]);
+                    if (day >= 1 && day <= daysInMonth) {
+                        dailySpends[day] += parseFloat(t.amount || 0);
+                    }
+                }
+            }
+        });
+
+        // Compute density thresholds based on budget
+        const dailyBudget = (this.budget > 0 ? this.budget : 30000) / 30;
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const spent = dailySpends[day];
+            let level = 0;
+            if (spent > 0) {
+                if (spent <= dailyBudget * 0.25) level = 1;
+                else if (spent <= dailyBudget * 0.75) level = 2;
+                else if (spent <= dailyBudget * 1.5) level = 3;
+                else level = 4;
+            }
+
+            const formattedSpent = this.formatCurrency(spent);
+            const dateStr = new Date(selectedYear, selectedMonth, day).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+
+            const tile = document.createElement('div');
+            tile.className = 'heatmap-tile';
+            tile.setAttribute('data-level', level);
+            tile.setAttribute('data-tooltip', `${dateStr}: ${formattedSpent} Spent`);
+            tile.innerHTML = `
+                <span class="tile-date">${day}</span>
+                <span class="tile-amount" style="font-size: 0.65rem; color: #fff; margin-top: 2px;">${spent > 0 ? this.formatShortCurrency(spent) : ''}</span>
+            `;
+            grid.appendChild(tile);
+        }
+        
+        if (window.lucide) lucide.createIcons();
+    }
+
+    formatShortCurrency(val) {
+        if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M';
+        if (val >= 1000) return (val / 1000).toFixed(0) + 'K';
+        return val.toFixed(0);
+    }
+
+    playAudio(type) {
+        if (this.settings?.soundDisabled) return;
+
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const ctx = new AudioContext();
+
+            if (type === 'coin') {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.frequency.setValueAtTime(587.33, ctx.currentTime); 
+                osc.frequency.exponentialRampToValueAtTime(1174.66, ctx.currentTime + 0.05); 
+                osc.frequency.exponentialRampToValueAtTime(2200, ctx.currentTime + 0.15); 
+
+                gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+
+                osc.start();
+                osc.stop(ctx.currentTime + 0.35);
+
+                const osc2 = ctx.createOscillator();
+                const gain2 = ctx.createGain();
+                osc2.type = 'triangle';
+                osc2.connect(gain2);
+                gain2.connect(ctx.destination);
+                osc2.frequency.setValueAtTime(3500, ctx.currentTime);
+                gain2.gain.setValueAtTime(0.15, ctx.currentTime);
+                gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+                osc2.start();
+                osc2.stop(ctx.currentTime + 0.25);
+            }
+            else if (type === 'shatter') {
+                const dur = 0.5;
+                const bufferSize = ctx.sampleRate * dur;
+                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(400, ctx.currentTime);
+                filter.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + dur);
+
+                const noiseGain = ctx.createGain();
+                noiseGain.gain.setValueAtTime(0.4, ctx.currentTime);
+                noiseGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+
+                noise.connect(filter);
+                filter.connect(noiseGain);
+                noiseGain.connect(ctx.destination);
+
+                noise.start();
+
+                const osc = ctx.createOscillator();
+                const oscGain = ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.connect(oscGain);
+                oscGain.connect(ctx.destination);
+
+                osc.frequency.setValueAtTime(150, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.3);
+
+                oscGain.gain.setValueAtTime(0.5, ctx.currentTime);
+                oscGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+
+                osc.start();
+                osc.stop(ctx.currentTime + 0.3);
+            }
+            else if (type === 'chime') {
+                const notes = [261.63, 329.63, 392.00, 493.88, 523.25]; 
+                notes.forEach((freq, idx) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+
+                    osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.06);
+                    gain.gain.setValueAtTime(0, ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + idx * 0.06 + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.06 + 0.4);
+
+                    osc.start(ctx.currentTime + idx * 0.06);
+                    osc.stop(ctx.currentTime + idx * 0.06 + 0.4);
+                });
+            }
+            else if (type === 'click') {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.frequency.setValueAtTime(2000, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(500, ctx.currentTime + 0.03);
+
+                gain.gain.setValueAtTime(0.08, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.03);
+
+                osc.start();
+                osc.stop(ctx.currentTime + 0.03);
+            }
+        } catch (e) {
+            console.error('Audio synthesis failed:', e);
+        }
     }
 
 }
