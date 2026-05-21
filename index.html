@@ -16,6 +16,8 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Premium Ambient Aura Mesh Background -->
+    <div id="aura-overlay" class="aura-background-mesh"></div>
     <div class="app-container">
         <!-- AUTHENTICATION PORTAL OVERLAY -->
         <div id="auth-portal" class="auth-overlay">
@@ -304,12 +306,18 @@
 
                     <!-- Category Budgets Card -->
                     <div class="glass" id="category-budgets-card" style="margin-top: 1.5rem; padding: 1.5rem; display: none;">
-                        <div class="chart-header" style="margin-bottom: 1.25rem; display: flex; flex-direction: column; align-items: flex-start; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.75rem;">
-                            <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
-                                <i data-lucide="target" style="width: 20px; height: 20px; color: var(--primary);"></i>
-                                Category Budgets
-                            </h3>
-                            <p class="text-muted" style="font-size: 0.85rem; margin: 0.25rem 0 0 0;">Micro-manage your monthly spending limits</p>
+                        <div class="chart-header" style="margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.75rem; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                                    <i data-lucide="target" style="width: 20px; height: 20px; color: var(--primary);"></i>
+                                    Category Budgets
+                                </h3>
+                                <p class="text-muted" style="font-size: 0.85rem; margin: 0.25rem 0 0 0;">Micro-manage your monthly spending limits</p>
+                            </div>
+                            <button id="sweep-budgets-btn" class="btn-primary" style="padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border: none; cursor: pointer; font-weight: 600;" onclick="window.app.runMonthlySweep()">
+                                <i data-lucide="sparkles" style="width: 14px; height: 14px;"></i>
+                                Sweep & Reset Month
+                            </button>
                         </div>
                         <div class="category-budgets-grid" id="category-budgets-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;">
                             <!-- Dynamically loaded progress bars -->
@@ -599,6 +607,22 @@
                     </button>
                 </div>
 
+                <!-- Live Exchange Rates Ticker and Currency Switcher -->
+                <div class="glass wealth-ticker-container" style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1.25rem; border-radius: 12px; margin-bottom: 1.5rem; gap: 15px; background: linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 100%); flex-wrap: wrap; border: 1px solid var(--glass-border);">
+                    <!-- Exchange Rates Marquee -->
+                    <div class="wealth-ticker-bar" style="flex: 1; overflow: hidden; white-space: nowrap; position: relative; display: flex; align-items: center;">
+                        <div class="ticker-content" id="wealth-ticker-content" style="display: inline-block; color: var(--text-muted); font-size: 0.8rem; font-family: monospace; font-weight: 600;">
+                            🟢 USD/PKR 278.52 <span class="ticker-up">▲ 0.12</span> &nbsp;&nbsp;|&nbsp;&nbsp; 🟢 EUR/PKR 302.15 <span class="ticker-down">▼ 0.05</span> &nbsp;&nbsp;|&nbsp;&nbsp; 🟢 BTC/USD 67,420 <span class="ticker-up">▲ 1.4%</span> &nbsp;&nbsp;|&nbsp;&nbsp; 🟢 GOLD/PKR 224,500 <span class="ticker-up">▲ 0.8%</span>
+                        </div>
+                    </div>
+                    <!-- Currency Select Toggles -->
+                    <div style="display: flex; gap: 6px; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 8px; border: 1px solid var(--glass-border);">
+                        <button id="w-curr-USD" class="currency-toggle-btn" onclick="window.app.setWealthCurrency('USD')" style="padding: 0.4rem 0.8rem; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 0.75rem; font-weight: 700; transition: all 0.3s ease;">USD</button>
+                        <button id="w-curr-PKR" class="currency-toggle-btn active" onclick="window.app.setWealthCurrency('PKR')" style="padding: 0.4rem 0.8rem; border-radius: 6px; border: none; background: var(--primary); color: #fff; cursor: pointer; font-size: 0.75rem; font-weight: 700; transition: all 0.3s ease; box-shadow: 0 0 10px var(--aura-glow);">PKR</button>
+                        <button id="w-curr-EUR" class="currency-toggle-btn" onclick="window.app.setWealthCurrency('EUR')" style="padding: 0.4rem 0.8rem; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 0.75rem; font-weight: 700; transition: all 0.3s ease;">EUR</button>
+                    </div>
+                </div>
+
                 <!-- Wealth Stats Card Grid -->
                 <div class="analytics-summary-grid" style="margin-bottom: 1.5rem;">
                     <div class="summary-stat glass wealth-card-silver">
@@ -643,14 +667,21 @@
                                     <circle cx="18" cy="18" r="15.915" fill="none" stroke="#eab308" stroke-width="3.2" stroke-dasharray="0 100" stroke-dashoffset="0" id="allocation-gold" class="allocation-slice" />
                                     <!-- Real Estate slice -->
                                     <circle cx="18" cy="18" r="15.915" fill="none" stroke="#10b981" stroke-width="3.2" stroke-dasharray="0 100" stroke-dashoffset="0" id="allocation-realestate" class="allocation-slice" />
+                                    <!-- Liquid Cash slice -->
+                                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#ff4d6d" stroke-width="3.2" stroke-dasharray="0 100" stroke-dashoffset="0" id="allocation-cash" class="allocation-slice" />
                                 </svg>
                                 <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
-                                    <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Assets</span>
+                                    <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Portfolio</span>
                                     <div id="allocation-total-ratio" style="font-size: 1.1rem; font-weight: 700; color: var(--text-main);">100%</div>
                                 </div>
                             </div>
                             <!-- Legend list -->
                             <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;">
+                                    <span style="width: 10px; height: 10px; border-radius: 50%; background: #ff4d6d;"></span>
+                                    <span class="text-muted">Liquid Cash:</span>
+                                    <span id="ratio-cash-pct" style="font-weight: 600; color: var(--text-main);">0%</span>
+                                </div>
                                 <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;">
                                     <span style="width: 10px; height: 10px; border-radius: 50%; background: #00b3ff;"></span>
                                     <span class="text-muted">Stocks:</span>
@@ -726,6 +757,26 @@
                     <p class="text-muted">Earn points, unlock glowing badges, and optimize your Financial Health Score</p>
                 </div>
 
+                <!-- Neon XP Progression Bar (Upgrade) -->
+                <div class="glass xp-container" style="padding: 1.25rem; border-radius: 12px; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%); border: 1px solid var(--glass-border);">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div id="xp-level-badge" class="xp-badge" style="background: linear-gradient(135deg, var(--primary), var(--secondary)); color: #fff; width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.2rem; box-shadow: 0 0 15px var(--aura-glow);">1</div>
+                        <div>
+                            <h4 id="xp-level-title" style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-main);">Budget Scout</h4>
+                            <p id="xp-level-text" class="text-muted" style="margin: 2px 0 0 0; font-size: 0.85rem;">Level up by completing quests and maintaining high score</p>
+                        </div>
+                    </div>
+                    <div style="flex: 1; min-width: 250px; display: flex; flex-direction: column; gap: 6px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 600;">
+                            <span style="color: var(--text-muted);">XP PROGRESS</span>
+                            <span id="xp-progress-ratio" style="color: var(--primary);">0 / 500 XP</span>
+                        </div>
+                        <div class="xp-progress-bar-bg" style="width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden; border: 1px solid var(--glass-border); position: relative;">
+                            <div id="xp-progress-bar-fill" class="xp-progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); border-radius: 5px; box-shadow: 0 0 10px var(--primary); transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="analytics-insights-row" style="margin-bottom: 1.5rem; display: flex; gap: 20px;">
                     <!-- Massive Glowing Health Gauge -->
                     <div class="insight-card glass" style="flex: 1; text-align: center; padding: 2rem; display: flex; flex-direction: column; align-items: center; justify-content: center;">
@@ -759,11 +810,26 @@
                     </div>
                 </div>
 
-                <!-- Glowing Badges Drawer -->
-                <div class="glass" style="padding: 1.5rem; border-radius: 12px;">
-                    <h3 style="margin-bottom: 1rem; color: var(--text-main); font-weight: 600; font-size: 1.05rem;">Unlocked Financial Badges</h3>
-                    <div class="quests-badges-grid" id="quests-badges-container">
-                        <!-- Badges list rendered here -->
+                <!-- Glowing Badges Drawer upgraded to 3D Trophy Showcase -->
+                <div class="glass trophy-room" style="padding: 2rem; border-radius: 12px; background: linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 100%); overflow: hidden;">
+                    <div class="trophy-room-header" style="margin-bottom: 2rem; text-align: center;">
+                        <h3 style="margin: 0; color: var(--text-main); font-weight: 700; font-size: 1.4rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i data-lucide="trophy" style="color: #ffb703; width: 24px; height: 24px;"></i>
+                            The SpendWise Trophy Showcase Room
+                        </h3>
+                        <p class="text-muted" style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">Your physical hall of financial achievements and badges</p>
+                    </div>
+                    
+                    <div class="trophy-cabinet" style="display: flex; flex-direction: column; gap: 3rem; padding: 1rem 0;">
+                        <!-- Shelf 1 -->
+                        <div class="trophy-shelf" style="position: relative; padding-bottom: 1.5rem;">
+                            <div class="quests-badges-grid" id="quests-badges-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 2rem; position: relative; z-index: 2; padding: 0 1rem;">
+                                <!-- Badges list rendered here -->
+                            </div>
+                            <div class="shelf-ledge" style="width: 100%; height: 12px; background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.02) 100%); border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); margin-top: 1rem; box-shadow: 0 10px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2); position: relative;">
+                                <div class="shelf-ledge-glow" style="position: absolute; top: -1px; left: 0; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, var(--primary), var(--secondary), transparent); opacity: 0.7; filter: blur(1px);"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -802,6 +868,9 @@
                             <div>
                                 <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">Group Members (comma separated)</label>
                                 <input type="text" id="split-members" placeholder="e.g. Sarah, Zack, Michael" required style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); color: var(--text-main); font-size: 0.85rem;">
+                                <span style="font-size: 0.68rem; color: #00ff88; margin-top: 4px; display: block; font-weight: 500;">
+                                    💡 You are automatically counted and included in the split calculation!
+                                </span>
                             </div>
                             <button type="submit" class="btn-primary" style="padding: 10px; width: 100%; border-radius: 8px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(135deg, #00b3ff, #a855f7);">
                                 <i data-lucide="share-2"></i>
@@ -1261,18 +1330,42 @@
                         <button class="btn-primary" onclick="app.updatePassword()" style="background: linear-gradient(135deg, var(--secondary), #ff0055); width: 100%; justify-content: center;">Update Password</button>
                     </div>
 
-                    <!-- Appearance Card -->
+                    <!-- Appearance Card / Preset Aura Switcher -->
                     <div class="glass settings-card">
                         <div class="card-header">
-                            <i data-lucide="palette"></i>
-                            <h3>Visual Overdrive</h3>
+                            <i data-lucide="sparkles"></i>
+                            <h3>Aura Accent Presets</h3>
                         </div>
-                        <label>Accent Color</label>
-                        <div class="color-presets">
-                            <div class="color-swatch active" style="background: #00e5ff;" onclick="app.setAccent('#00e5ff', this)" title="Cyan"></div>
-                            <div class="color-swatch" style="background: #7000ff;" onclick="app.setAccent('#7000ff', this)" title="Purple"></div>
-                            <div class="color-swatch" style="background: #ff0055;" onclick="app.setAccent('#ff0055', this)" title="Rose"></div>
-                            <div class="color-swatch" style="background: #00ff88;" onclick="app.setAccent('#00ff88', this)" title="Emerald"></div>
+                        <label style="margin-bottom: 8px; display: block; font-size: 0.85rem; color: var(--text-muted);">Select Ambient Aura Preset</label>
+                        <div class="aura-preset-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                            <div class="aura-option active" id="aura-cyberpunk-teal" onclick="app.setAura('cyberpunk-teal')">
+                                <div class="aura-colors">
+                                    <span style="background: #00e5ff; box-shadow: 0 0 8px #00e5ff;"></span>
+                                    <span style="background: #7000ff; box-shadow: 0 0 8px #7000ff;"></span>
+                                </div>
+                                <span class="aura-label">Cyberpunk Teal</span>
+                            </div>
+                            <div class="aura-option" id="aura-aurora-purple" onclick="app.setAura('aurora-purple')">
+                                <div class="aura-colors">
+                                    <span style="background: #a855f7; box-shadow: 0 0 8px #a855f7;"></span>
+                                    <span style="background: #ec4899; box-shadow: 0 0 8px #ec4899;"></span>
+                                </div>
+                                <span class="aura-label">Aurora Purple</span>
+                            </div>
+                            <div class="aura-option" id="aura-gold-horizon" onclick="app.setAura('gold-horizon')">
+                                <div class="aura-colors">
+                                    <span style="background: #ffb703; box-shadow: 0 0 8px #ffb703;"></span>
+                                    <span style="background: #fb8500; box-shadow: 0 0 8px #fb8500;"></span>
+                                </div>
+                                <span class="aura-label">Gold Horizon</span>
+                            </div>
+                            <div class="aura-option" id="aura-emerald-clean" onclick="app.setAura('emerald-clean')">
+                                <div class="aura-colors">
+                                    <span style="background: #00ff88; box-shadow: 0 0 8px #00ff88;"></span>
+                                    <span style="background: #00b4d8; box-shadow: 0 0 8px #00b4d8;"></span>
+                                </div>
+                                <span class="aura-label">Emerald Clean</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1294,6 +1387,20 @@
                                     <option value="AUD">AUD (A$)</option>
                                     <option value="CAD">CAD (C$)</option>
                                     <option value="JPY">JPY (¥)</option>
+                                </select>
+                                <i data-lucide="chevron-down" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text-muted); width: 16px; height: 16px;"></i>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top: 1.25rem;">
+                            <label>Budget Cycle Start Day</label>
+                            <div class="custom-select-wrapper" style="position: relative;">
+                                <select id="settings-cycle-start" onchange="app.setCycleStart(this.value)" style="width: 100%; padding: 0.8rem; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--bg-card); color: var(--text-main); font-family: inherit; -webkit-appearance: none; appearance: none;">
+                                    <option value="1">1st of the month</option>
+                                    <option value="5">5th of the month</option>
+                                    <option value="10">10th of the month</option>
+                                    <option value="15">15th of the month</option>
+                                    <option value="20">20th of the month</option>
+                                    <option value="25">25th of the month</option>
                                 </select>
                                 <i data-lucide="chevron-down" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text-muted); width: 16px; height: 16px;"></i>
                             </div>
@@ -1552,6 +1659,26 @@
                 <div class="form-group">
                     <label for="cat-budget">Monthly Budget Limit (Optional)</label>
                     <input type="number" id="cat-budget" placeholder="e.g. 500 (0 or leave empty for no limit)" min="0" step="any">
+                </div>
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label for="cat-rollover">Leftovers Rollover Policy</label>
+                    <div class="custom-select-wrapper" style="position: relative;">
+                        <select id="cat-rollover" onchange="window.app.handleRolloverPolicyChange(this.value)" style="width: 100%; padding: 0.8rem; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--bg-card); color: var(--text-main); font-family: inherit; -webkit-appearance: none; appearance: none;">
+                            <option value="reset">Reset to zero (Default)</option>
+                            <option value="rollover">Roll over to next month's envelope</option>
+                            <option value="gullak">Transfer leftovers to Gullak goals</option>
+                        </select>
+                        <i data-lucide="chevron-down" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text-muted); width: 16px; height: 16px;"></i>
+                    </div>
+                </div>
+                <div class="form-group" id="cat-gullak-select-group" style="margin-top: 1rem; display: none;">
+                    <label for="cat-gullak-target">Select Target Gullak Goal</label>
+                    <div class="custom-select-wrapper" style="position: relative;">
+                        <select id="cat-gullak-target" style="width: 100%; padding: 0.8rem; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--bg-card); color: var(--text-main); font-family: inherit; -webkit-appearance: none; appearance: none;">
+                            <!-- Active Gullak goals will be injected here dynamically -->
+                        </select>
+                        <i data-lucide="chevron-down" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text-muted); width: 16px; height: 16px;"></i>
+                    </div>
                 </div>
                 <p class="form-hint">Tip: Use icon names from <a href="https://lucide.dev/icons" target="_blank">lucide.dev</a></p>
                 <button type="submit" class="btn-submit" id="category-submit-btn">Add Category</button>
@@ -1813,6 +1940,37 @@
             <div class="confirm-actions">
                 <button class="btn-secondary" id="confirm-cancel">Cancel</button>
                 <button class="btn-primary" id="confirm-ok" style="margin-top: 0;">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Debt Receipt Sharing -->
+    <div id="debt-share-modal" class="share-modal-overlay">
+        <div class="share-modal-content">
+            <div class="share-modal-header">
+                <h3>Share Debt Receipt</h3>
+                <button class="close-share-btn" id="close-share-modal">&times;</button>
+            </div>
+            
+            <div class="card-preview-area">
+                <img id="debt-receipt-preview-img" class="receipt-preview-img" src="" alt="Debt Receipt Preview" />
+            </div>
+            
+            <div class="share-modal-actions">
+                <button class="btn-share-whatsapp" id="btn-whatsapp-text">
+                    <i data-lucide="share-2"></i>
+                    <span>Share Picture Directly</span>
+                </button>
+                <div class="btn-row">
+                    <button class="btn-share-primary" id="btn-copy-card-img">
+                        <i data-lucide="copy"></i>
+                        <span>Copy Card Image</span>
+                    </button>
+                    <button class="btn-share-secondary" id="btn-download-card-img">
+                        <i data-lucide="download"></i>
+                        <span>Download PNG</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>

@@ -1710,8 +1710,292 @@ select option {
     color: var(--text-muted);
 }
 
+.mini-amount {
     color: var(--text);
     font-weight: 500;
+}
+
+/* Debt Vault Actions & WhatsApp Sharing Card Modal */
+.debt-card-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+    width: 100%;
+}
+
+.debt-card-actions .settle-btn {
+    flex: 2;
+    margin-top: 0;
+}
+
+.debt-card-actions .share-debt-btn {
+    flex: 1;
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: var(--text);
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.debt-card-actions .share-debt-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 229, 255, 0.15);
+}
+
+.debt-card-actions .share-debt-btn i {
+    width: 16px;
+    height: 16px;
+}
+
+/* Share Modal Styling */
+.share-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(10, 10, 15, 0.75);
+    backdrop-filter: blur(12px);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    transition: all 0.3s;
+}
+
+.share-modal-content {
+    width: 100%;
+    max-width: 500px;
+    background: rgba(18, 18, 28, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.share-modal-content::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(0, 229, 255, 0.05) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.share-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+}
+
+.share-modal-header h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+}
+
+.close-share-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.75rem;
+    cursor: pointer;
+    transition: color 0.2s;
+    line-height: 1;
+}
+
+.close-share-btn:hover {
+    color: #ff4d6d;
+}
+
+/* Card Preview Window */
+.card-preview-area {
+    width: 100%;
+    border-radius: 16px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    aspect-ratio: 1.5;
+    position: relative;
+    z-index: 1;
+}
+
+.receipt-preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s;
+}
+
+.receipt-preview-img:hover {
+    transform: scale(1.02);
+}
+
+/* Actions in Share Modal */
+.share-modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+    position: relative;
+    z-index: 1;
+}
+
+.share-modal-actions .btn-row {
+    display: flex;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.btn-share-primary {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    border: none;
+    border-radius: 12px;
+    color: white;
+    padding: 0.85rem;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.btn-share-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 229, 255, 0.35);
+}
+
+.btn-share-whatsapp {
+    background: linear-gradient(135deg, #25D366, #128C7E);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    padding: 0.85rem;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.btn-share-whatsapp:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(37, 211, 102, 0.35);
+}
+
+.btn-share-secondary {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 12px;
+    color: var(--text);
+    padding: 0.85rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.btn-share-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+/* Shared Wallet Split Member Status Chips */
+.split-members-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.split-member-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.split-member-chip.pending {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+}
+
+.split-member-chip.paid {
+    background: rgba(0, 255, 136, 0.1);
+    border: 1px solid rgba(0, 255, 136, 0.25);
+    color: #00ff88;
+}
+
+.settle-member-chip-btn {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    border: none;
+    border-radius: 20px;
+    color: white;
+    padding: 2px 8px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-left: 0.25rem;
+}
+
+.settle-member-chip-btn:hover {
+    transform: scale(1.06);
+    box-shadow: 0 4px 10px rgba(0, 229, 255, 0.35);
+}
+
+.settle-member-chip-btn i {
+    width: 10px;
+    height: 10px;
 }
 
 /* Theme Vault Styles */
@@ -1876,6 +2160,75 @@ select option {
     background: #ffffff !important;
     border: 1px solid #e2e8f0 !important;
 }
+
+/* ---- Light Mode: Aura Preset Cards ---- */
+.theme-light .aura-option {
+    background: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+}
+.theme-light .aura-option:hover {
+    border-color: #2563eb !important;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.12) !important;
+}
+.theme-light .aura-option.active {
+    background: #eff6ff !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 0 12px rgba(37, 99, 235, 0.2) !important;
+}
+.theme-light .aura-label { color: #334155 !important; }
+
+/* ---- Light Mode: Live Ticker ---- */
+.theme-light .wealth-ticker-bar {
+    background: #f1f5f9 !important;
+    border-color: #e2e8f0 !important;
+    color: #334155 !important;
+}
+
+/* ---- Light Mode: Trophy Showcase / Quest Badges ---- */
+.theme-light .quest-badge-slot {
+    background: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+}
+.theme-light .quest-badge-slot.unlocked {
+    background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%) !important;
+    border-color: rgba(37, 99, 235, 0.25) !important;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.1) !important;
+}
+.theme-light .badge-icon-wrapper { filter: none !important; }
+.theme-light .badge-name { color: #334155 !important; }
+.theme-light .badge-locked { opacity: 0.45 !important; filter: grayscale(100%) !important; }
+
+/* ---- Light Mode: XP Progress Bar ---- */
+.theme-light .xp-progress-track {
+    background: #e2e8f0 !important;
+}
+.theme-light .xp-level-badge {
+    background: linear-gradient(135deg, #2563eb, #4f46e5) !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
+}
+
+/* ---- Light Mode: Wealth Hub Metrics ---- */
+.theme-light .wealth-currency-btn {
+    background: #f1f5f9 !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #64748b !important;
+}
+.theme-light #wealth-ledger-tbody tr:hover td {
+    background: #eff6ff !important;
+}
+
+/* ---- Light Mode: Rollover Badge in Category Budgets ---- */
+.theme-light .pacing-badge.cool { background: rgba(37, 99, 235, 0.1) !important; color: #2563eb !important; }
+.theme-light .pacing-badge.fast { background: rgba(239, 68, 68, 0.1) !important; }
+.theme-light .pacing-badge.critical { background: rgba(239, 68, 68, 0.15) !important; }
+
+/* ---- Light Mode: Category Budget Card ---- */
+.theme-light .category-budget-item {
+    background: #ffffff !important;
+    border-color: #e2e8f0 !important;
+}
+
+
 
 /* Audit Log Styles */
 .audit-log-container {
@@ -4447,6 +4800,264 @@ select option {
         grid-template-columns: repeat(5, 1fr);
     }
 }
+
+/* ==========================================================================
+   Aura Theme & Variable Custom Animations
+   ========================================================================== */
+@property --primary {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: #00e5ff;
+}
+@property --secondary {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: #7000ff;
+}
+@property --aura-glow {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: rgba(0, 229, 255, 0.4);
+}
+
+:root {
+    transition: --primary 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+                --secondary 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+                --aura-glow 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Presets Grid Card */
+.aura-preset-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.aura-option {
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.02);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.aura-option::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at center, var(--aura-glow) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 0;
+}
+
+.aura-option:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.aura-option:hover::before {
+    opacity: 0.3;
+}
+
+.aura-option.active {
+    border-color: var(--primary) !important;
+    background: rgba(var(--primary-rgb), 0.06) !important;
+    box-shadow: 0 0 15px rgba(var(--primary-rgb), 0.2), inset 0 0 10px rgba(var(--primary-rgb), 0.1) !important;
+}
+
+.aura-option.active::before {
+    opacity: 0.5;
+}
+
+.aura-colors {
+    display: flex;
+    gap: 6px;
+    position: relative;
+    z-index: 1;
+}
+
+.aura-colors span {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.aura-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-main);
+    position: relative;
+    z-index: 1;
+}
+
+/* ==========================================================================
+   Trophy Showcase Room & Glassmorphic Cabinet
+   ========================================================================== */
+.trophy-room {
+    perspective: 1000px;
+}
+
+.quests-badges-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 2rem;
+    padding: 1rem 0;
+}
+
+.quest-badge-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem 1rem;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.01);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    text-align: center;
+    transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+    transform-style: preserve-3d;
+    cursor: pointer;
+}
+
+.quest-badge-slot.unlocked {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border-color: rgba(var(--primary-rgb), 0.15) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.quest-badge-slot.unlocked .badge-icon-wrapper {
+    background: radial-gradient(circle, rgba(var(--primary-rgb), 0.2) 0%, rgba(var(--primary-rgb), 0.02) 70%);
+    border: 1px solid rgba(var(--primary-rgb), 0.4);
+    color: var(--primary);
+    box-shadow: 0 0 20px var(--aura-glow), inset 0 0 10px rgba(var(--primary-rgb), 0.2);
+}
+
+.quest-badge-slot.locked {
+    opacity: 0.5;
+    filter: grayscale(1);
+    background: rgba(255, 255, 255, 0.005);
+}
+
+.quest-badge-slot.locked .badge-icon-wrapper {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+}
+
+.badge-icon-wrapper {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.75rem;
+    transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+    transform: translateZ(20px); /* 3D pop effect */
+}
+
+.badge-icon-wrapper i {
+    width: 28px;
+    height: 28px;
+}
+
+/* 3D tilt hover animations on badges via CSS */
+.quest-badge-slot:hover {
+    transform: translateY(-8px) rotateX(10deg) rotateY(4deg) scale(1.05);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.quest-badge-slot.unlocked:hover {
+    border-color: rgba(var(--primary-rgb), 0.3) !important;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4), 0 0 25px rgba(var(--primary-rgb), 0.15);
+}
+
+.quest-badge-slot.unlocked:hover .badge-icon-wrapper {
+    transform: translateZ(35px) scale(1.1);
+    box-shadow: 0 0 30px var(--aura-glow), inset 0 0 15px rgba(var(--primary-rgb), 0.4);
+    filter: brightness(1.2);
+}
+
+/* Neon-glowing level bar and badge styling */
+.xp-badge {
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    animation: badge-pulse 2s infinite ease-in-out;
+}
+
+@keyframes badge-pulse {
+    0%, 100% { transform: scale(1); filter: brightness(1); }
+    50% { transform: scale(1.05); filter: brightness(1.15); }
+}
+
+.xp-progress-fill {
+    position: relative;
+}
+
+.xp-progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: 10px;
+    background: #fff;
+    filter: blur(2px);
+    opacity: 0.8;
+}
+
+/* ==========================================================================
+   Live Wealth Exchange Rate Ticker styling
+   ========================================================================== */
+.wealth-ticker-bar {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+}
+
+.ticker-content {
+    display: inline-block;
+    padding-left: 100%;
+    animation: ticker-slide 30s linear infinite;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+}
+
+.ticker-content:hover {
+    animation-play-state: paused;
+}
+
+@keyframes ticker-slide {
+    0% { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(-100%, 0, 0); }
+}
+
+.ticker-up {
+    color: #00ff88 !important;
+    font-weight: bold;
+    margin-left: 2px;
+}
+
+.ticker-down {
+    color: #ff4d6d !important;
+    font-weight: bold;
+    margin-left: 2px;
+}
+
 
 
 

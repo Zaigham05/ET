@@ -36,6 +36,8 @@ class SpendWise {
         this.editingCategoryId = null;
         this.auditLog = [];
         this.lastTransactionId = 0;
+        this.wealthCurrency = 'PKR';
+        this.currentLevel = null;
 
         // Check for active session using Firebase Auth
         window.addEventListener('DOMContentLoaded', () => {
@@ -215,6 +217,8 @@ class SpendWise {
             theme: 'dark',
             currency: 'USD'
         };
+        if (!this.settings.aura) this.settings.aura = 'cyberpunk-teal';
+        if (!this.settings.cycleStartDay) this.settings.cycleStartDay = '1';
 
         this.auditLog = JSON.parse(localStorage.getItem(prefix + 'auditLog')) || [];
         this.lastTransactionId = parseInt(localStorage.getItem(prefix + 'lastTransactionId')) || 0;
@@ -239,7 +243,9 @@ class SpendWise {
         this.initFirebase();
         this.updateSyncStatus();
         this.updateUI();
+        this.startTickerSystem();
     }
+
 
     updateSyncStatus() {
         const badge = document.getElementById('sync-status');
@@ -1279,7 +1285,7 @@ class SpendWise {
     }
 
     createTransactionHTML(t) {
-        const cat = this.categories[t.category] || this.categories.Other;
+        const cat = this.categories[t.category] || this.categories.Other || { icon: 'help-circle', color: '#94a3b8' };
         const isOut = ['Expense', 'Lend', 'Payback'].includes(t.type);
         const personTag = t.person ? `<span class="person-tag"><i data-lucide="user"></i> ${t.person}</span>` : '';
 
@@ -1356,17 +1362,23 @@ class SpendWise {
         card.style.display = 'block';
         container.innerHTML = budgetedCategories.map(([name, data]) => {
             const spent = categorySpending[name] || 0;
-            const budget = data.budget;
+            // Effective budget = base budget + any rolled-over leftover from last cycle
+            const budget = (data.budget || 0) + (data.rolloverAmount || 0);
             const percent = Math.min((spent / budget) * 100, 100);
             const isOver = spent > budget;
             const progressColor = isOver ? 'var(--secondary)' : (percent >= 80 ? '#ffb703' : 'var(--primary)');
-            
-            // Calculate pacing burn velocity relative to current day of month
+
+            // Calculate pacing using custom cycle start day
             const today = new Date();
-            const currentDay = today.getDate();
-            const totalDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-            const daysRatio = currentDay / totalDays;
-            const burnVelocity = spent / budget;
+            const cycleStartDay = parseInt(this.settings?.cycleStartDay || '1', 10);
+            const cycleStart = new Date(today.getFullYear(), today.getMonth(), cycleStartDay);
+            if (today < cycleStart) cycleStart.setMonth(cycleStart.getMonth() - 1);
+            const nextCycleStart = new Date(cycleStart.getFullYear(), cycleStart.getMonth() + 1, cycleStartDay);
+            const totalMs = nextCycleStart - cycleStart;
+            const elapsedMs = today - cycleStart;
+            const daysRatio = Math.max(0, Math.min(1, elapsedMs / totalMs));
+            const burnVelocity = budget > 0 ? spent / budget : 0;
+
             
             let pacingHtml = '';
             if (isOver) {
@@ -1399,6 +1411,7 @@ class SpendWise {
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: ${data.color};"></span>
                             <span style="font-weight: 600; color: var(--text-main);">${name}</span>
+                            ${data.rolloverAmount > 0 ? `<span style="font-size: 0.65rem; background: rgba(0,229,255,0.15); color: var(--primary); padding: 1px 6px; border-radius: 10px; font-weight: 700;">↩ +${this.formatCurrency(data.rolloverAmount)}</span>` : ''}
                         </div>
                         <span style="font-size: 0.85rem; font-weight: 500; color: ${isOver ? 'var(--secondary)' : 'var(--text-muted)'};">
                             ${this.formatCurrency(spent)} / ${this.formatCurrency(budget)}
@@ -1416,6 +1429,7 @@ class SpendWise {
                     </div>
                 </div>
             `;
+
         }).join('');
     }
 
@@ -2381,6 +2395,10 @@ class SpendWise {
         const icon = document.getElementById('cat-icon').value;
         const color = document.getElementById('cat-color').value;
         const budget = parseFloat(document.getElementById('cat-budget').value) || 0;
+        const rolloverPolicy = document.getElementById('cat-rollover')?.value || 'reset';
+        const gullakTarget = rolloverPolicy === 'gullak'
+            ? (document.getElementById('cat-gullak-target')?.value || '')
+            : '';
 
         const oldCat = this.categories[name];
         const oldBudget = oldCat ? (oldCat.budget || 0) : 0;
@@ -2399,7 +2417,9 @@ class SpendWise {
             this.logAction('EDIT', `Category: ${name}`, `Updated budget from ${this.formatCurrency(oldBudget)} to ${this.formatCurrency(budget)}.`);
         }
 
-        this.categories[name] = { icon, color, budget };
+        // Preserve existing rolloverAmount when editing
+        const existingRollover = (oldCat && oldCat.rolloverAmount) ? oldCat.rolloverAmount : 0;
+        this.categories[name] = { icon, color, budget, rolloverPolicy, gullakTarget, rolloverAmount: existingRollover };
 
         this.setLocal('categories', JSON.stringify(this.categories));
         this.renderCategories();
@@ -2408,6 +2428,7 @@ class SpendWise {
         this.toggleModal(this.categoryModal, false);
         this.showToast(`Category "${name}" saved!`, 'success');
     }
+
 
     handleSetBudget(e) {
         e.preventDefault();
@@ -2662,8 +2683,20 @@ class SpendWise {
         document.getElementById('cat-color').value = cat.color;
         document.getElementById('cat-budget').value = cat.budget || '';
 
+        // Restore rollover policy fields
+        const rolloverSelect = document.getElementById('cat-rollover');
+        if (rolloverSelect) {
+            rolloverSelect.value = cat.rolloverPolicy || 'reset';
+            this.handleRolloverPolicyChange(cat.rolloverPolicy || 'reset');
+        }
+        const gullakSelect = document.getElementById('cat-gullak-target');
+        if (gullakSelect && cat.gullakTarget) {
+            setTimeout(() => { gullakSelect.value = cat.gullakTarget; }, 50);
+        }
+
         this.toggleModal(this.categoryModal, true);
     }
+
 
     deleteCategory(name) {
         // Prevent deleting categories that are in use
@@ -3456,10 +3489,16 @@ class SpendWise {
                         ${recentHistory}
                     </div>
                     ${balance !== 0 ? `
-                        <button class="settle-btn" onclick="app.settleDebt('${name.replace(/'/g, "\\'")}', ${balance})">
-                            <i data-lucide="check-circle"></i>
-                            <span>Settle Full Balance</span>
-                        </button>
+                        <div class="debt-card-actions">
+                            <button class="settle-btn" onclick="app.settleDebt('${name.replace(/'/g, "\\'")}', ${balance})">
+                                <i data-lucide="check-circle"></i>
+                                <span>Settle Full Balance</span>
+                            </button>
+                            <button class="share-debt-btn" onclick="app.openShareDebtModal('${name.replace(/'/g, "\\'")}', ${balance})">
+                                <i data-lucide="share-2"></i>
+                                <span>Share</span>
+                            </button>
+                        </div>
                     ` : ''}
                 </div>
             `;
@@ -3490,6 +3529,328 @@ class SpendWise {
                 this.showToast(`Settled with ${name}!`, 'success');
             }
         });
+    }
+
+
+    generateDebtReceiptCanvas(name, balance) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 600;
+        canvas.height = 400;
+        const ctx = canvas.getContext('2d');
+
+        const drawRoundRect = (c, x, y, w, h, r) => {
+            if (r > w / 2) r = w / 2;
+            if (r > h / 2) r = h / 2;
+            c.beginPath();
+            c.moveTo(x + r, y);
+            c.arcTo(x + w, y, x + w, y + h, r);
+            c.arcTo(x + w, y + h, x, y + h, r);
+            c.arcTo(x, y + h, x, y, r);
+            c.arcTo(x, y, x + w, y, r);
+            c.closePath();
+        };
+
+        // 1. Draw premium dark card background
+        const bgGrad = ctx.createLinearGradient(0, 0, 600, 400);
+        bgGrad.addColorStop(0, '#0f0f1b');
+        bgGrad.addColorStop(1, '#181829');
+        ctx.fillStyle = bgGrad;
+        drawRoundRect(ctx, 0, 0, 600, 400, 24);
+        ctx.fill();
+
+        // 2. Draw colorful radial glow in top right
+        const radialGlow = ctx.createRadialGradient(480, 80, 0, 480, 80, 250);
+        if (balance > 0) {
+            radialGlow.addColorStop(0, 'rgba(0, 229, 255, 0.12)');
+            radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        } else {
+            radialGlow.addColorStop(0, 'rgba(255, 77, 109, 0.12)');
+            radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        }
+        ctx.fillStyle = radialGlow;
+        ctx.fillRect(0, 0, 600, 400);
+
+        // 3. Draw thin glowing card border
+        const borderGrad = ctx.createLinearGradient(0, 0, 600, 400);
+        if (balance > 0) {
+            borderGrad.addColorStop(0, 'rgba(0, 229, 255, 0.4)');
+            borderGrad.addColorStop(0.5, 'rgba(0, 255, 136, 0.2)');
+            borderGrad.addColorStop(1, 'rgba(0, 229, 255, 0.05)');
+        } else {
+            borderGrad.addColorStop(0, 'rgba(255, 77, 109, 0.4)');
+            borderGrad.addColorStop(0.5, 'rgba(255, 138, 0, 0.2)');
+            borderGrad.addColorStop(1, 'rgba(255, 77, 109, 0.05)');
+        }
+        ctx.strokeStyle = borderGrad;
+        ctx.lineWidth = 2.5;
+        drawRoundRect(ctx, 1.25, 1.25, 597.5, 397.5, 24);
+        ctx.stroke();
+
+        // 4. Draw Avatar Circle & Initials
+        const avatarX = 55;
+        const avatarY = 55;
+        const avatarR = 26;
+        const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+        const avatarGrad = ctx.createLinearGradient(avatarX - avatarR, avatarY - avatarR, avatarX + avatarR, avatarY + avatarR);
+        if (balance > 0) {
+            avatarGrad.addColorStop(0, '#00e5ff');
+            avatarGrad.addColorStop(1, '#00ff88');
+        } else {
+            avatarGrad.addColorStop(0, '#ff4d6d');
+            avatarGrad.addColorStop(1, '#ff8a00');
+        }
+        ctx.fillStyle = avatarGrad;
+        ctx.beginPath();
+        ctx.arc(avatarX, avatarY, avatarR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Initials Text
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(initials, avatarX, avatarY);
+
+        // 5. Draw Person Name
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 22px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(name, 100, 42);
+
+        // 6. Draw Status Badge & Label
+        const badgeX = 100;
+        const badgeY = 60;
+        const badgeW = 120;
+        const badgeH = 24;
+        const badgeR = 12;
+        
+        ctx.beginPath();
+        if (balance > 0) {
+            ctx.fillStyle = 'rgba(0, 255, 136, 0.12)';
+            ctx.strokeStyle = 'rgba(0, 255, 136, 0.3)';
+        } else {
+            ctx.fillStyle = 'rgba(255, 77, 109, 0.12)';
+            ctx.strokeStyle = 'rgba(255, 77, 109, 0.3)';
+        }
+        ctx.lineWidth = 1;
+        drawRoundRect(ctx, badgeX, badgeY, badgeW, badgeH, badgeR);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.textBaseline = 'middle';
+        if (balance > 0) {
+            ctx.fillStyle = '#00ff88';
+            ctx.font = 'bold 11px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('THEY OWE YOU', badgeX + badgeW/2, badgeY + badgeH/2);
+        } else {
+            ctx.fillStyle = '#ff4d6d';
+            ctx.font = 'bold 11px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('YOU OWE THEM', badgeX + badgeW/2, badgeY + badgeH/2 + 0.5);
+        }
+
+        // 7. Draw "SECURE LEDGER RECORD" centered label
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.font = '700 11px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('SECURE DEBT LEDGER RECORD', 300, 140);
+
+        // 8. Draw Main Amount (Big visual centerpiece)
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 50px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        const formattedAmt = this.formatCurrency(Math.abs(balance));
+        ctx.fillText(formattedAmt, 300, 195);
+
+        // 9. Draw Wording details
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '500 14px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        
+        let wording = '';
+        if (balance > 0) {
+            wording = `Friendly Reminder: Please pay ${formattedAmt} to settle this balance.`;
+        } else {
+            wording = `Friendly Update: I have to pay ${formattedAmt} to settle this balance.`;
+        }
+        ctx.fillText(wording, 300, 250);
+
+        // 10. Draw Receipt cut-out dashed line
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.moveTo(30, 295);
+        ctx.lineTo(570, 295);
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset dash
+
+        // 11. Draw Footer Brand info & Stamp
+        const footerY = 345;
+        
+        // Brand logo diamond icon
+        const logoX = 145;
+        ctx.fillStyle = '#00e5ff';
+        ctx.beginPath();
+        ctx.moveTo(logoX, footerY - 8);
+        ctx.lineTo(logoX + 8, footerY);
+        ctx.lineTo(logoX, footerY + 8);
+        ctx.lineTo(logoX - 8, footerY);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 13px Inter, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('SPENDWISE DEBT VAULT', logoX + 16, footerY + 0.5);
+
+        const dateStr = new Date().toLocaleDateString('en-PK', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.font = '500 11px Inter, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(`Issued: ${dateStr}`, 455, footerY + 0.5);
+
+        return canvas.toDataURL('image/png');
+    }
+
+    openShareDebtModal(name, balance) {
+        this.playAudio('click');
+        
+        const modal = document.getElementById('debt-share-modal');
+        const previewImg = document.getElementById('debt-receipt-preview-img');
+        const btnWhatsapp = document.getElementById('btn-whatsapp-text');
+        const btnCopy = document.getElementById('btn-copy-card-img');
+        const btnDownload = document.getElementById('btn-download-card-img');
+        const btnClose = document.getElementById('close-share-modal');
+        
+        if (!modal || !previewImg) return;
+        
+        // 1. Generate the visual card PNG
+        const dataUrl = this.generateDebtReceiptCanvas(name, balance);
+        previewImg.src = dataUrl;
+        
+        // 2. Formulate the dynamic text message
+        const amountStr = this.formatCurrency(Math.abs(balance));
+        let shareText = '';
+        if (balance > 0) {
+            shareText = `Hi ${name}, just a friendly update from SpendWise. Currently, you owe me ${amountStr}. Let's settle up soon! 🧾`;
+        } else {
+            shareText = `Hi ${name}, just a friendly update from SpendWise. Currently, I owe you ${amountStr}. Let's settle up soon! 💳`;
+        }
+        
+        // 3. Wire Direct File Sharing (Web Share API)
+        btnWhatsapp.onclick = async () => {
+            this.playAudio('click');
+            try {
+                const response = await fetch(dataUrl);
+                const blob = await response.blob();
+                const file = new File([blob], `spendwise-receipt-${name.toLowerCase().replace(/\s+/g, '-')}.png`, { type: 'image/png' });
+                
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: 'SpendWise Debt Receipt',
+                        text: shareText
+                    });
+                } else {
+                    // Fallback: Copy image to clipboard and open WhatsApp
+                    await navigator.clipboard.write([
+                        new ClipboardItem({
+                            [blob.type]: blob
+                        })
+                    ]);
+                    this.showToast('Copied card picture! Opening WhatsApp... Paste it in the chat.', 'info');
+                    
+                    setTimeout(() => {
+                        const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
+                        window.open(whatsappUrl, '_blank');
+                    }, 1500);
+                }
+            } catch (err) {
+                console.error('Image share failed:', err);
+                // Standard text fallback if everything fails
+                const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
+                window.open(whatsappUrl, '_blank');
+            }
+        };
+        
+        // 4. Wire Download Card PNG Trigger
+        btnDownload.onclick = () => {
+            this.playAudio('click');
+            const link = document.createElement('a');
+            link.download = `spendwise-receipt-${name.toLowerCase().replace(/\s+/g, '-')}.png`;
+            link.href = dataUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            this.showToast('Visual receipt PNG downloaded!', 'success');
+        };
+        
+        // 5. Wire Clipboard Copy PNG Trigger
+        btnCopy.onclick = async () => {
+            this.playAudio('click');
+            try {
+                // Fetch the blob directly from the data URL
+                const response = await fetch(dataUrl);
+                const blob = await response.blob();
+                
+                // Write image blob to modern clipboard API
+                await navigator.clipboard.write([
+                    new ClipboardItem({
+                        [blob.type]: blob
+                    })
+                ]);
+                
+                // Show dynamic button feedback
+                const origText = btnCopy.innerHTML;
+                btnCopy.innerHTML = `<i data-lucide="check"></i> <span>Copied Card Image!</span>`;
+                if (window.lucide) lucide.createIcons();
+                
+                this.showToast('Visual card copied to clipboard! Paste it directly in WhatsApp.', 'success');
+                
+                setTimeout(() => {
+                    btnCopy.innerHTML = origText;
+                    if (window.lucide) lucide.createIcons();
+                }, 3000);
+            } catch (err) {
+                console.error('Clipboard copy failed:', err);
+                this.showToast('Could not copy image. Try downloading it!', 'error');
+            }
+        };
+        
+        // 6. Wire Close Triggers
+        const closeModal = () => {
+            modal.style.display = 'none';
+            // Cleanup click handlers
+            btnWhatsapp.onclick = null;
+            btnDownload.onclick = null;
+            btnCopy.onclick = null;
+            btnClose.onclick = null;
+            modal.onclick = null;
+        };
+        
+        btnClose.onclick = closeModal;
+        
+        // Close on clicking outside content
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        };
+        
+        // Render Lucide icons inside modal
+        if (window.lucide) lucide.createIcons();
+        
+        // Open Modal
+        modal.style.display = 'flex';
     }
 
 
@@ -3662,8 +4023,9 @@ class SpendWise {
         if (profileName) profileName.textContent = this.settings.username;
 
         // Apply Theme
+        const isLight = this.settings.theme === 'light';
         document.body.classList.remove('theme-light', 'theme-dark');
-        if (this.settings.theme === 'light') {
+        if (isLight) {
             document.body.classList.add('theme-light');
         } else {
             document.body.classList.add('theme-dark');
@@ -3673,11 +4035,19 @@ class SpendWise {
             opt.classList.toggle('active', opt.id === `theme-${this.settings.theme}`);
         });
 
-        // Apply Accent
-        document.documentElement.style.setProperty('--primary', this.settings.accent);
+        // Apply Accent (dark mode only — light mode uses its own palette)
+        if (!isLight) {
+            document.documentElement.style.setProperty('--primary', this.settings.accent);
+        } else {
+            // Remove inline override so .theme-light CSS class rules take over
+            document.documentElement.style.removeProperty('--primary');
+            document.documentElement.style.removeProperty('--secondary');
+            document.documentElement.style.removeProperty('--aura-glow');
+            document.documentElement.style.removeProperty('--primary-rgb');
+            document.documentElement.style.removeProperty('--secondary-rgb');
+        }
         document.querySelectorAll('.color-swatch').forEach(sw => {
             const swatchColor = sw.style.backgroundColor;
-            // Handle hex to rgb conversion comparison if needed, or just compare roughly
             sw.classList.toggle('active', this.settings.accent && swatchColor.includes(this.settings.accent.toLowerCase()));
         });
 
@@ -3686,7 +4056,139 @@ class SpendWise {
         if (currencySelect && this.settings.currency) {
             currencySelect.value = this.settings.currency;
         }
+
+        // Apply Aura Theme (dark mode only) & Cycle Start Day
+        if (!isLight) {
+            this.applyAura(this.settings.aura || 'cyberpunk-teal');
+        }
+        const cycleSelect = document.getElementById('settings-cycle-start');
+        if (cycleSelect) {
+            cycleSelect.value = this.settings.cycleStartDay || '1';
+        }
     }
+
+    applyAura(preset) {
+        // Never apply aura inline vars in light mode — let .theme-light CSS win
+        if (this.settings?.theme === 'light') return;
+
+        const presets = {
+            'cyberpunk-teal': {
+                primary: '#00e5ff', secondary: '#7000ff',
+                glow: 'rgba(0, 229, 255, 0.4)',
+                primaryRgb: '0, 229, 255', secondaryRgb: '112, 0, 255'
+            },
+            'aurora-purple': {
+                primary: '#a855f7', secondary: '#ec4899',
+                glow: 'rgba(168, 85, 247, 0.4)',
+                primaryRgb: '168, 85, 247', secondaryRgb: '236, 72, 153'
+            },
+            'gold-horizon': {
+                primary: '#ffb703', secondary: '#fb8500',
+                glow: 'rgba(255, 183, 3, 0.4)',
+                primaryRgb: '255, 183, 3', secondaryRgb: '251, 133, 0'
+            },
+            'emerald-clean': {
+                primary: '#00ff88', secondary: '#00b4d8',
+                glow: 'rgba(0, 255, 136, 0.4)',
+                primaryRgb: '0, 255, 136', secondaryRgb: '0, 180, 216'
+            }
+        };
+        const p = presets[preset] || presets['cyberpunk-teal'];
+        const root = document.documentElement;
+        root.style.setProperty('--primary', p.primary);
+        root.style.setProperty('--secondary', p.secondary);
+        root.style.setProperty('--aura-glow', p.glow);
+        root.style.setProperty('--primary-rgb', p.primaryRgb);
+        root.style.setProperty('--secondary-rgb', p.secondaryRgb);
+    }
+
+    setAura(preset) {
+        this.settings.aura = preset;
+        this.setLocal('settings', JSON.stringify(this.settings));
+        this.saveToCloud();
+        this.applyAura(preset);
+        // Update active state on aura options
+        document.querySelectorAll('.aura-option').forEach(el => {
+            el.classList.toggle('active', el.id === `aura-${preset}`);
+        });
+        this.showToast(`Aura theme applied: ${preset.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`, 'success');
+    }
+
+    setCycleStart(day) {
+        this.settings.cycleStartDay = day;
+        this.setLocal('settings', JSON.stringify(this.settings));
+        this.saveToCloud();
+        this.render && this.render();
+        this.updateUI();
+        this.showToast(`Budget cycle now starts on day ${day} of each month.`, 'success');
+    }
+
+    handleRolloverPolicyChange(val) {
+        const gullakGroup = document.getElementById('cat-gullak-select-group');
+        if (!gullakGroup) return;
+        if (val === 'gullak') {
+            gullakGroup.style.display = 'block';
+            // Populate with active goals
+            const select = document.getElementById('cat-gullak-target');
+            if (select) {
+                const activeGoals = (this.goals || []).filter(g => parseFloat(g.current || 0) < parseFloat(g.target || 0));
+                select.innerHTML = activeGoals.length > 0
+                    ? activeGoals.map(g => `<option value="${g.id}">${g.title}</option>`).join('')
+                    : '<option value="">No active Gullak goals found</option>';
+            }
+        } else {
+            gullakGroup.style.display = 'none';
+        }
+    }
+
+    async runMonthlySweep() {
+        const ok = await this.confirmDialog(
+            'Sweep & Reset Month?\n\nThis will process all rollover policies:\n• "Rollover" envelopes carry leftover balance to next month\n• "Gullak" envelopes transfer leftovers to your selected Gullak goal\n• "Reset" envelopes simply zero out\n\nThis action cannot be undone.',
+            'refresh-cw'
+        );
+        if (!ok) return;
+
+        const monthlyTransactions = this.getFilteredTransactions(true);
+        let sweepLog = [];
+        let totalSwept = 0;
+
+        Object.entries(this.categories).forEach(([name, data]) => {
+            if (!data.budget || data.budget <= 0) return;
+            const spent = monthlyTransactions
+                .filter(t => t.type === 'Expense' && t.category === name)
+                .reduce((s, t) => s + parseFloat(t.amount), 0);
+            const leftover = parseFloat(data.budget) + parseFloat(data.rolloverAmount || 0) - spent;
+            if (leftover <= 0) return; // Nothing to sweep
+
+            const policy = data.rolloverPolicy || 'reset';
+
+            if (policy === 'rollover') {
+                data.rolloverAmount = (data.rolloverAmount || 0) + leftover;
+                sweepLog.push(`↩️ "${name}" rolled over ${this.formatCurrency(leftover)}`);
+                totalSwept += leftover;
+            } else if (policy === 'gullak' && data.gullakTarget) {
+                const targetGoal = (this.goals || []).find(g => g.id === data.gullakTarget);
+                if (targetGoal) {
+                    targetGoal.current = parseFloat(targetGoal.current || 0) + leftover;
+                    sweepLog.push(`🪙 "${name}" swept ${this.formatCurrency(leftover)} → ${targetGoal.title}`);
+                    totalSwept += leftover;
+                    this.triggerCoinDrop(targetGoal.id);
+                }
+            } else {
+                // Reset — nothing to carry
+                data.rolloverAmount = 0;
+                sweepLog.push(`🔄 "${name}" reset to zero.`);
+            }
+        });
+
+        this.logAction('SWEEP', 'Monthly Budget Sweep', `Swept ${this.formatCurrency(totalSwept)}. ${sweepLog.join(' | ')}`);
+        this.saveToLocal();
+        this.saveToCloud();
+        this.updateUI();
+        this.showToast(`✅ Month swept! ${sweepLog.length} envelopes processed.`, 'success');
+        this.playAudio('chime');
+    }
+
 
     updateProfile() {
         const newName = document.getElementById('settings-username').value;
@@ -3696,6 +4198,7 @@ class SpendWise {
         this.applySettings();
         this.showToast('Profile updated successfully!', 'success');
     }
+
 
     async updatePassword() {
         const oldPassword = document.getElementById('settings-old-password').value;
@@ -4663,27 +5166,30 @@ class SpendWise {
         const totalYield = currentTotal - investedTotal;
         const totalYieldPct = investedTotal > 0 ? (totalYield / investedTotal) * 100 : 0;
 
-        // Render wealth metrics
-        document.getElementById('wealth-net-worth').textContent = this.formatCurrency(grossNetWorth);
-        document.getElementById('wealth-invested').textContent = this.formatCurrency(investedTotal);
-        document.getElementById('wealth-current-val').textContent = this.formatCurrency(currentTotal);
+        // Render wealth metrics using selected currency
+        const fmtW = (v) => this.formatWealthCurrency(v);
+        document.getElementById('wealth-net-worth').textContent = fmtW(grossNetWorth);
+        document.getElementById('wealth-invested').textContent = fmtW(investedTotal);
+        document.getElementById('wealth-current-val').textContent = fmtW(currentTotal);
         document.getElementById('wealth-asset-count').textContent = `${(this.assets || []).length} Assets`;
 
         const returnEl = document.getElementById('wealth-total-return');
         if (returnEl) {
             const sign = totalYield >= 0 ? '+' : '';
-            returnEl.textContent = `${sign}${totalYieldPct.toFixed(2)}% Net Yield (${sign}${this.formatCurrency(totalYield)})`;
+            returnEl.textContent = `${sign}${totalYieldPct.toFixed(2)}% Net Yield (${sign}${fmtW(totalYield)})`;
             returnEl.className = `stat-trend ${totalYield >= 0 ? 'positive' : 'negative'}`;
         }
 
-        // SVG allocation wheel math
-        const totalVal = currentTotal;
+        // SVG allocation wheel math — now includes Liquid Cash
+        const liquidCash = Math.max(0, cashInHand);
+        const totalValWithCash = currentTotal + liquidCash;
         let cumulative = 0;
+
+        // Render each asset type slice
         ['Stocks', 'Crypto', 'Gold', 'Real Estate'].forEach(type => {
-            const pct = totalVal > 0 ? (typeVals[type] / totalVal) * 100 : 0;
+            const pct = totalValWithCash > 0 ? (typeVals[type] / totalValWithCash) * 100 : 0;
             const el = document.getElementById('allocation-' + type.toLowerCase().replace(' ', ''));
             const textEl = document.getElementById(`ratio-${type.toLowerCase().replace(' ', '')}-pct`);
-            
             if (textEl) textEl.textContent = pct.toFixed(0) + '%';
             if (el) {
                 el.setAttribute('stroke-dasharray', `${pct} 100`);
@@ -4692,8 +5198,18 @@ class SpendWise {
             }
         });
 
+        // Render Cash-in-Hand slice
+        const cashPct = totalValWithCash > 0 ? (liquidCash / totalValWithCash) * 100 : 0;
+        const cashEl = document.getElementById('allocation-cash');
+        const cashTextEl = document.getElementById('ratio-cash-pct');
+        if (cashTextEl) cashTextEl.textContent = cashPct.toFixed(0) + '%';
+        if (cashEl) {
+            cashEl.setAttribute('stroke-dasharray', `${cashPct} 100`);
+            cashEl.setAttribute('stroke-dashoffset', `${-cumulative}`);
+        }
+
         const totalRatioEl = document.getElementById('allocation-total-ratio');
-        if (totalRatioEl) totalRatioEl.textContent = totalVal > 0 ? '100%' : '0%';
+        if (totalRatioEl) totalRatioEl.textContent = totalValWithCash > 0 ? '100%' : '0%';
 
         // Generate custom advisor recommendation
         const adviceBox = document.getElementById('wealth-advice-box');
@@ -4963,7 +5479,38 @@ class SpendWise {
         checkUnlock('cashCommander', qCashCommander, 'Cash Commander');
         checkUnlock('consistentLogger', qConsistentLogger, 'Consistent Logger');
 
-        // Render active quests lists
+        // --- XP & Level System ---
+        const questsCompletedCount = [qEnvelopeMaster, qSaverKnight, qBillDestroyer, qFrugalSensei,
+            qWealthCreator, qDebtDefeater, qCashCommander, qConsistentLogger].filter(Boolean).length;
+        const xp = (questsCompletedCount * 100) + (score * 5);
+        const level = Math.floor(xp / 500) + 1;
+        const xpInLevel = xp % 500;
+        const xpPct = (xpInLevel / 500) * 100;
+
+        const levelTitles = {
+            1: 'Budget Scout', 2: 'Envelope Warden', 3: 'Wealth Sage',
+            4: 'Cash Commander', 5: 'Finance Sovereign', 6: 'Platinum Investor', 7: 'Money Maestro'
+        };
+        const levelTitle = levelTitles[Math.min(level, 7)] || `Tier ${level} Master`;
+
+        // Detect level-up
+        if (this.currentLevel !== null && level > this.currentLevel) {
+            this.playAudio('level-up');
+            this.showToast(`⬆️ Level Up! You are now Level ${level}: ${levelTitle}`, 'success');
+        }
+        this.currentLevel = level;
+
+        // Update XP UI
+        const xpBadge = document.getElementById('xp-level-badge');
+        const xpTitle = document.getElementById('xp-level-title');
+        const xpRatio = document.getElementById('xp-progress-ratio');
+        const xpFill = document.getElementById('xp-progress-bar-fill');
+        if (xpBadge) xpBadge.textContent = level;
+        if (xpTitle) xpTitle.textContent = `Level ${level}: ${levelTitle}`;
+        if (xpRatio) xpRatio.textContent = `${xpInLevel} / 500 XP`;
+        if (xpFill) xpFill.style.width = `${xpPct}%`;
+
+
         challengesContainer.innerHTML = `
             <div class="quest-challenge-card ${qEnvelopeMaster ? 'completed' : ''}">
                 <div>
@@ -5179,7 +5726,37 @@ class SpendWise {
                         <span style="font-weight: 600; color: #00ff88;">${this.formatCurrency(shareOwed)}</span>
                     </div>
                     <div style="font-size: 0.8rem; color: var(--text-muted); background: rgba(255,255,255,0.02); padding: 8px; border-radius: 6px;">
-                        <strong>Members:</strong> ${split.members.join(', ')} (${this.formatCurrency(shareOwed)}/person owed)
+                        <strong>Members</strong> <span style="font-size: 0.7rem; opacity: 0.8;">(${this.formatCurrency(shareOwed)}/person owed)</span>
+                        <div class="split-members-list">
+                            <span class="split-member-chip paid">
+                                <i data-lucide="check-circle" style="width: 12px; height: 12px; color: #00ff88;"></i>
+                                <span>You (Paid)</span>
+                            </span>
+                            ${split.members.map(member => {
+                                const isPaid = split.settledMembers && split.settledMembers.includes(member);
+                                if (isPaid) {
+                                    return `
+                                        <span class="split-member-chip paid">
+                                            <i data-lucide="check-circle" style="width: 12px; height: 12px; color: #00ff88;"></i>
+                                            <span>${member} (Paid)</span>
+                                        </span>
+                                    `;
+                                } else {
+                                    return `
+                                        <span class="split-member-chip pending">
+                                            <i data-lucide="clock" style="width: 12px; height: 12px; color: var(--text-muted);"></i>
+                                            <span>${member}</span>
+                                            ${!isSettled ? `
+                                                <button class="settle-member-chip-btn" onclick="window.app.settleMemberShare('${split.id}', '${member.replace(/'/g, "\\'")}')">
+                                                    <i data-lucide="check"></i>
+                                                    <span>Settle</span>
+                                                </button>
+                                            ` : ''}
+                                        </span>
+                                    `;
+                                }
+                            }).join('')}
+                        </div>
                     </div>
                     ${!isSettled ? `
                         <button class="btn-primary" onclick="window.app.settleSplitBill('${split.id}')" style="padding: 6px; font-size: 0.8rem; font-weight: 600; width: 100%; border-radius: 6px; background: linear-gradient(135deg, #00ff88, #00b3ff);">Reconcile & Settle Shares</button>
@@ -5211,6 +5788,7 @@ class SpendWise {
             const share = amount / (split.members.length + 1);
             
             split.members.forEach(member => {
+                if (split.settledMembers && split.settledMembers.includes(member)) return;
                 if (!balances[member]) balances[member] = 0;
                 balances[member] -= share; // Member owes money
                 balances['You'] += share;  // You are owed money
@@ -5395,7 +5973,8 @@ class SpendWise {
             category,
             amount: personalShare,
             date: new Date().toISOString().split('T')[0],
-            person: members[0], // Trace member tag
+            person: this.settings.username || 'You', // Trace creator's own name instead of first group member
+            note: `[Split: ${title}] - Personal portion of group bill.`,
             notes: `[Split: ${title}] - Personal portion of group bill.`
         };
 
@@ -5428,18 +6007,88 @@ class SpendWise {
     }
 
     settleSplitBill(id) {
+        this.playAudio('click');
         const split = this.sharedWallets.find(s => s.id === id);
-        if (!split) return;
+        if (!split) return Promise.resolve();
 
-        this.confirmDialog(`Mark group split "${split.title}" as fully settled & reconciled?`, 'check-circle').then(ok => {
+        return this.confirmDialog(`Mark group split "${split.title}" as fully settled & reconciled?`, 'check-circle').then(ok => {
             if (ok) {
+                const shareOwed = parseFloat(split.totalCost) / (split.members.length + 1);
+                
+                // Initialize settledMembers array if not present
+                if (!split.settledMembers) split.settledMembers = [];
+                
+                split.members.forEach(member => {
+                    if (!split.settledMembers.includes(member)) {
+                        split.settledMembers.push(member);
+                        
+                        // Generate a Repay transaction for this member
+                        const transaction = {
+                            id: ++this.lastTransactionId,
+                            type: 'Repay',
+                            category: split.category || 'Debt',
+                            amount: shareOwed,
+                            date: new Date().toISOString().split('T')[0],
+                            person: member,
+                            note: `Split Settled: ${member} paid share for "${split.title}"`,
+                            notes: `Split Settled: ${member} paid share for "${split.title}"`
+                        };
+                        this.transactions.push(transaction);
+                    }
+                });
+
                 split.status = 'Settled';
                 this.logSharedActivity('quest', `Reconciled all shares of "${split.title}" split ledger successfully.`);
                 this.showToast(`Split reconciled!`, 'success');
                 
                 this.saveToLocal();
                 this.saveToCloud();
+                this.updateUI();
                 this.renderSharedWallets();
+            }
+        });
+    }
+
+    settleMemberShare(splitId, member) {
+        this.playAudio('click');
+        const split = this.sharedWallets.find(s => s.id === splitId);
+        if (!split) return Promise.resolve();
+        
+        const shareOwed = parseFloat(split.totalCost) / (split.members.length + 1);
+        return this.confirmDialog(`Mark ${member}'s share of ${this.formatCurrency(shareOwed)} as settled?`, 'check-circle').then(ok => {
+            if (ok) {
+                if (!split.settledMembers) split.settledMembers = [];
+                if (!split.settledMembers.includes(member)) {
+                    split.settledMembers.push(member);
+                    
+                    // Generate a Repay transaction for this member
+                    const transaction = {
+                        id: ++this.lastTransactionId,
+                        type: 'Repay',
+                        category: split.category || 'Debt',
+                        amount: shareOwed,
+                        date: new Date().toISOString().split('T')[0],
+                        person: member,
+                        note: `Split Settled: ${member} paid share for "${split.title}"`,
+                        notes: `Split Settled: ${member} paid share for "${split.title}"`
+                    };
+                    this.transactions.push(transaction);
+                }
+                
+                this.logSharedActivity('user', `${member} paid their share of ${this.formatCurrency(shareOwed)} for "${split.title}"`);
+                
+                // If all members paid, promote the overall split status to Settled
+                const allPaid = split.members.every(m => split.settledMembers.includes(m));
+                if (allPaid) {
+                    split.status = 'Settled';
+                    this.logSharedActivity('quest', `Split "${split.title}" is now fully settled!`);
+                }
+                
+                this.saveToLocal();
+                this.saveToCloud();
+                this.updateUI();
+                this.renderSharedWallets();
+                this.showToast(`Settled ${member}'s share!`, 'success');
             }
         });
     }
@@ -5648,6 +6297,7 @@ class SpendWise {
                 const amount = parseFloat(split.totalCost) || 0;
                 const share = amount / (split.members.length + 1);
                 split.members.forEach(member => {
+                    if (split.settledMembers && split.settledMembers.includes(member)) return;
                     if (!balances[member]) balances[member] = 0;
                     balances[member] -= share;
                     balances['You'] += share;
@@ -6617,11 +7267,274 @@ ${yyyy}-${mm}-15,Planet Fitness Gym,300,Expense`;
                 osc.start();
                 osc.stop(ctx.currentTime + 0.03);
             }
+            else if (type === 'level-up') {
+                // Ascending arpeggio chime sequence for level-up
+                const arpeggioNotes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50];
+                arpeggioNotes.forEach((freq, idx) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.08);
+                    gain.gain.setValueAtTime(0, ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + idx * 0.08 + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.08 + 0.5);
+                    osc.start(ctx.currentTime + idx * 0.08);
+                    osc.stop(ctx.currentTime + idx * 0.08 + 0.5);
+                });
+            }
         } catch (e) {
             console.error('Audio synthesis failed:', e);
         }
     }
 
+    // --- Wealth Hub Currency Conversion & Ticker System ---
+
+    formatWealthCurrency(amount) {
+        const curr = this.wealthCurrency || 'PKR';
+        // Exchange rates relative to PKR (base)
+        const rates = { PKR: 1, USD: 1 / 278, EUR: 1 / 302 };
+        const symbols = { PKR: 'PKR ', USD: '$', EUR: '€' };
+        const converted = amount * (rates[curr] || 1);
+        const sym = symbols[curr] || 'PKR ';
+        if (Math.abs(converted) >= 1000000) return `${sym}${(converted / 1000000).toFixed(2)}M`;
+        if (Math.abs(converted) >= 1000) return `${sym}${(converted / 1000).toFixed(1)}K`;
+        return `${sym}${converted.toFixed(2)}`;
+    }
+
+    setWealthCurrency(curr) {
+        this.wealthCurrency = curr;
+        // Update active toggle button style
+        ['USD', 'PKR', 'EUR'].forEach(c => {
+            const btn = document.getElementById(`w-curr-${c}`);
+            if (btn) {
+                if (c === curr) {
+                    btn.style.background = 'var(--primary)';
+                    btn.style.color = '#fff';
+                    btn.style.boxShadow = '0 0 10px var(--aura-glow)';
+                } else {
+                    btn.style.background = 'transparent';
+                    btn.style.color = 'var(--text-muted)';
+                    btn.style.boxShadow = 'none';
+                }
+            }
+        });
+        this.renderWealthHub();
+    }
+
+    startTickerSystem() {
+        if (this._tickerInterval) clearInterval(this._tickerInterval);
+
+        const baseRates = { USDPKR: 278.52, EURPKR: 302.15, BTCUSD: 67420, GOLDPKR: 224500 };
+        const fluctuate = (base, maxPct = 0.003) => {
+            const delta = base * maxPct * (Math.random() * 2 - 1);
+            return parseFloat((base + delta).toFixed(2));
+        };
+
+        const updateTicker = () => {
+            const usdPkr = fluctuate(baseRates.USDPKR);
+            const eurPkr = fluctuate(baseRates.EURPKR);
+            const btcUsd = fluctuate(baseRates.BTCUSD, 0.01);
+            const goldPkr = fluctuate(baseRates.GOLDPKR, 0.005);
+
+            const usdDelta = (usdPkr - baseRates.USDPKR).toFixed(2);
+            const eurDelta = (eurPkr - baseRates.EURPKR).toFixed(2);
+            const btcDelta = ((btcUsd - baseRates.BTCUSD) / baseRates.BTCUSD * 100).toFixed(2);
+            const goldDelta = ((goldPkr - baseRates.GOLDPKR) / baseRates.GOLDPKR * 100).toFixed(2);
+
+            const fmtDelta = (d, prefix='') => {
+                const cls = parseFloat(d) >= 0 ? 'ticker-up' : 'ticker-down';
+                const sign = parseFloat(d) >= 0 ? '▲' : '▼';
+                return `<span class="${cls}">${sign} ${prefix}${Math.abs(d)}</span>`;
+            };
+
+            const tickerEl = document.getElementById('wealth-ticker-content');
+            if (tickerEl) {
+                tickerEl.innerHTML = `
+                    🟢 USD/PKR ${usdPkr.toFixed(2)} ${fmtDelta(usdDelta)} &nbsp;&nbsp;|&nbsp;&nbsp;
+                    🟢 EUR/PKR ${eurPkr.toFixed(2)} ${fmtDelta(eurDelta)} &nbsp;&nbsp;|&nbsp;&nbsp;
+                    🟢 BTC/USD ${btcUsd.toLocaleString()} ${fmtDelta(btcDelta, '')}% &nbsp;&nbsp;|&nbsp;&nbsp;
+                    🟢 GOLD/PKR ${goldPkr.toLocaleString()} ${fmtDelta(goldDelta, '')}%
+                `;
+            }
+
+            // Slightly drift base rates
+            baseRates.USDPKR = usdPkr;
+            baseRates.EURPKR = eurPkr;
+            baseRates.BTCUSD = btcUsd;
+            baseRates.GOLDPKR = goldPkr;
+        };
+
+        updateTicker();
+        this._tickerInterval = setInterval(updateTicker, 5000);
+    }
+
 }
 
-document.addEventListener('DOMContentLoaded', () => window.app = new SpendWise());
+document.addEventListener('DOMContentLoaded', () => {
+    window.app = new SpendWise();
+    
+    // Automated Self-Test Suite for Shared Wallets (Option A)
+    if (window.location.search.includes('test=true') || window.location.search.includes('test-true')) {
+        setTimeout(async () => {
+            console.log("🚀 SpendWise Automated Self-Test Suite Started...");
+            
+            // 1. Create a beautiful overlay modal
+            const overlay = document.createElement('div');
+            overlay.style.position = 'fixed';
+            overlay.style.top = '20px';
+            overlay.style.right = '20px';
+            overlay.style.width = '380px';
+            overlay.style.background = 'rgba(15, 23, 42, 0.96)';
+            overlay.style.backdropFilter = 'blur(16px)';
+            overlay.style.border = '1px solid rgba(0, 229, 255, 0.25)';
+            overlay.style.borderRadius = '16px';
+            overlay.style.boxShadow = '0 15px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 229, 255, 0.2)';
+            overlay.style.color = '#fff';
+            overlay.style.padding = '20px';
+            overlay.style.zIndex = '999999';
+            overlay.style.fontFamily = "'Inter', sans-serif";
+            overlay.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+            
+            overlay.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">
+                    <span style="font-size: 1.2rem;">🏆</span>
+                    <h3 style="margin: 0; font-size: 1rem; font-weight: 700; color: #00e5ff;">SpendWise Automated Test Suite</h3>
+                </div>
+                <div id="test-logs" style="font-size: 0.8rem; line-height: 1.6; display: flex; flex-direction: column; gap: 8px;">
+                    <div>⏳ Initializing test variables and backing up state...</div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            
+            const logElement = document.getElementById('test-logs');
+            const addLog = (text, status = 'info') => {
+                const el = document.createElement('div');
+                let emoji = 'ℹ️';
+                let color = '#94a3b8';
+                if (status === 'pass') { emoji = '✅'; color = '#00ff88'; }
+                if (status === 'fail') { emoji = '❌'; color = '#ff4d6d'; }
+                el.innerHTML = `<span style="margin-right: 6px;">${emoji}</span><span style="color: ${color}; font-weight: 500;">${text}</span>`;
+                logElement.appendChild(el);
+            };
+
+            try {
+                // Back up original state to restore later (clean test run)
+                const originalWallets = JSON.stringify(window.app.sharedWallets);
+                const originalTransactions = JSON.stringify(window.app.transactions);
+                
+                // Backup dialog and play audio
+                const originalConfirm = window.app.confirmDialog;
+                const originalPlay = window.app.playAudio;
+                
+                // Override popups/sounds for silent head-free automation
+                window.app.confirmDialog = () => Promise.resolve(true);
+                window.app.playAudio = () => {};
+                
+                addLog("Mocked confirmation and audio systems successfully.", "pass");
+                
+                // --- TEST CASE 1: Create a Group Split ---
+                addLog("Running TEST 1: Create Group Split...", "info");
+                
+                // Mock Split input fields
+                const splitTitle = "Automated Test Split";
+                const splitAmount = 3000;
+                const activeCategories = Object.keys(window.app.categories);
+                const splitCategory = activeCategories.length > 0 ? activeCategories[0] : "Other";
+                const splitMembers = "tester_a, tester_b";
+                
+                const titleEl = document.getElementById('split-title');
+                const amountEl = document.getElementById('split-amount');
+                const categoryEl = document.getElementById('split-category');
+                const membersEl = document.getElementById('split-members');
+                
+                if (titleEl) titleEl.value = splitTitle;
+                if (amountEl) amountEl.value = splitAmount;
+                if (categoryEl) categoryEl.value = splitCategory;
+                if (membersEl) membersEl.value = splitMembers;
+                
+                // Submit Form
+                const mockEvent = { preventDefault: () => {} };
+                window.app.handleBillSplit(mockEvent);
+                
+                // Verification
+                const foundSplit = window.app.sharedWallets.find(s => s.title === splitTitle);
+                const personalExpense = window.app.transactions.find(t => t.type === 'Expense' && t.notes && t.notes.includes(splitTitle));
+                
+                if (foundSplit && personalExpense && parseFloat(personalExpense.amount) === 1000) {
+                    addLog(`Created Split Group "${splitTitle}" and posted personal share (PKR 1,000) successfully.`, "pass");
+                } else {
+                    throw new Error("Failed to create Split group or post personal portion.");
+                }
+                
+                // --- TEST CASE 2: Settle Individual Member Share (Option A) ---
+                addLog("Running TEST 2: Settle Member 'tester_a' (Option A)...", "info");
+                
+                await window.app.settleMemberShare(foundSplit.id, 'tester_a');
+                
+                // Verification
+                const updatedSplit = window.app.sharedWallets.find(s => s.id === foundSplit.id);
+                const memberPaid = updatedSplit.settledMembers && updatedSplit.settledMembers.includes('tester_a');
+                const repayTx = window.app.transactions.find(t => t.type === 'Repay' && t.person === 'tester_a' && parseFloat(t.amount) === 1000);
+                
+                if (memberPaid && repayTx) {
+                    addLog("Marked 'tester_a' as paid & generated a dynamic Repay ledger transaction successfully.", "pass");
+                } else {
+                    throw new Error("Failed to settle member share or generate Option A Repay transaction.");
+                }
+                
+                // --- TEST CASE 3: Reconcile and settle the whole split ---
+                addLog("Running TEST 3: Reconcile entire split...", "info");
+                
+                await window.app.settleSplitBill(foundSplit.id);
+                
+                // Verification
+                const finalSplit = window.app.sharedWallets.find(s => s.id === foundSplit.id);
+                const allPaid = finalSplit.status === 'Settled' && finalSplit.settledMembers.includes('tester_b');
+                const repayTxB = window.app.transactions.find(t => t.type === 'Repay' && t.person === 'tester_b' && parseFloat(t.amount) === 1000);
+                
+                if (allPaid && repayTxB) {
+                    addLog("Marked entire split as settled & generated remaining Repay ledger transactions successfully.", "pass");
+                } else {
+                    throw new Error("Failed to reconcile split or generate secondary Repay transactions.");
+                }
+                
+                // --- CLEAN UP ---
+                // Restore original state
+                window.app.sharedWallets = JSON.parse(originalWallets);
+                window.app.transactions = JSON.parse(originalTransactions);
+                window.app.confirmDialog = originalConfirm;
+                window.app.playAudio = originalPlay;
+                
+                // Save and render UI
+                window.app.saveToLocal();
+                window.app.saveToCloud();
+                window.app.updateUI();
+                window.app.renderSharedWallets();
+                
+                addLog("State restored successfully. Test data cleaned up.", "pass");
+                
+                // Add final summary to overlay
+                overlay.innerHTML += `
+                    <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #00ff88; font-weight: 700; font-size: 0.95rem;">🎉 ALL TESTS PASSED!</span>
+                        <button onclick="this.parentElement.parentElement.remove()" style="background: linear-gradient(135deg, #00e5ff, #00b3ff); border: none; border-radius: 6px; padding: 4px 10px; color: #fff; font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='none'">Close</button>
+                    </div>
+                `;
+                
+            } catch (err) {
+                addLog(`Self-Test Suite Failed: ${err.message}`, "fail");
+                console.error(err);
+                
+                // Add close button on fail
+                overlay.innerHTML += `
+                    <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #ff4d6d; font-weight: 700; font-size: 0.95rem;">❌ FAILURE OCCURRED</span>
+                        <button onclick="this.parentElement.parentElement.remove()" style="background: #ff4d6d; border: none; border-radius: 6px; padding: 4px 10px; color: #fff; font-size: 0.75rem; font-weight: 700; cursor: pointer;">Close</button>
+                    </div>
+                `;
+            }
+        }, 1500); // Wait 1.5s to ensure full page and Lucide initialization
+    }
+});
