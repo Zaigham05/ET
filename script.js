@@ -244,6 +244,7 @@ class SpendWise {
         this.updateSyncStatus();
         this.updateUI();
         this.startTickerSystem();
+        this.updateMobileFab('dashboard');
     }
 
 
@@ -577,6 +578,11 @@ class SpendWise {
             e.preventDefault();
             this.switchView(link.id.replace('nav-', ''));
         }));
+
+        const mobileToggle = document.getElementById('mobile-sidebar-toggle');
+        if (mobileToggle) {
+            mobileToggle.addEventListener('click', () => this.toggleSidebar());
+        }
 
         if (this.viewAllBtn) {
             this.viewAllBtn.addEventListener('click', (e) => {
@@ -1254,6 +1260,76 @@ class SpendWise {
         if (viewName === 'calendar') this.renderCalendar();
         if (viewName === 'sandbox') this.renderSandbox();
         if (viewName === 'import') this.initCSVImporter();
+
+        this.updateMobileFab(viewName);
+    }
+
+    updateMobileFab(viewName) {
+        const fab = document.querySelector('.mobile-fab');
+        if (!fab) return;
+
+        // Clone and replace the FAB to remove any existing event listeners completely
+        const newFab = fab.cloneNode(true);
+        if (fab.parentNode) {
+            fab.parentNode.replaceChild(newFab, fab);
+        }
+
+        // Set dynamic action based on view
+        let action;
+        switch (viewName) {
+            case 'categories':
+                action = () => {
+                    this.editingCategoryId = null;
+                    this.categoryModalTitle.textContent = 'Add New Category';
+                    this.categorySubmitBtn.textContent = 'Add Category';
+                    this.categoryForm.reset();
+                    this.toggleModal(this.categoryModal, true);
+                };
+                break;
+            case 'goals':
+                action = () => {
+                    this.editingGoalId = null;
+                    document.getElementById('goal-modal-title').textContent = 'Create Savings Goal';
+                    document.getElementById('goal-submit-btn').textContent = 'Create Goal';
+                    document.getElementById('goal-form').reset();
+                    this.toggleModal(document.getElementById('goal-modal'), true);
+                };
+                break;
+            case 'recurring':
+                action = () => {
+                    this.editingSubscriptionId = null;
+                    document.getElementById('subscription-modal-title').textContent = 'Add Recurring Bill';
+                    document.getElementById('sub-submit-btn').textContent = 'Save Recurring Bill';
+                    this.subscriptionForm.reset();
+                    this.updateSubscriptionModalCategories();
+                    this.toggleModal(this.subscriptionModal, true);
+                };
+                break;
+            case 'wealth':
+                action = () => {
+                    this.editingAssetId = null;
+                    document.getElementById('wealth-modal-title').textContent = 'Add Portfolio Asset';
+                    document.getElementById('wealth-submit-btn').textContent = 'Save Asset Holdings';
+                    this.wealthForm.reset();
+                    this.toggleModal(this.wealthModal, true);
+                };
+                break;
+            default:
+                action = () => {
+                    this.editingId = null;
+                    this.modalTitle.textContent = 'Add New Transaction';
+                    this.submitBtn.textContent = 'Add Transaction';
+                    this.transactionForm.reset();
+                    this.toggleModal(this.expenseModal, true);
+                };
+                break;
+        }
+
+        newFab.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.playAudio('click');
+            action();
+        });
     }
 
     renderTransactions() {
@@ -4016,11 +4092,12 @@ class SpendWise {
 
         const hour = new Date().getHours();
         const timeGreeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
-        if (greeting) greeting.textContent = `${timeGreeting}, ${this.settings.username}!`;
-        if (userName) userName.textContent = this.settings.username;
-        if (avatar) avatar.textContent = this.settings.username.split(' ').map(n => n[0]).join('').toUpperCase();
-        if (settingsName) settingsName.value = this.settings.username;
-        if (profileName) profileName.textContent = this.settings.username;
+        const username = this.settings.username || (this.currentUser && this.currentUser.email ? this.currentUser.email.split('@')[0] : 'User');
+        if (greeting) greeting.textContent = `${timeGreeting}, ${username}!`;
+        if (userName) userName.textContent = username;
+        if (avatar) avatar.textContent = username.split(' ').filter(n => n).map(n => n[0]).join('').toUpperCase() || 'U';
+        if (settingsName) settingsName.value = username;
+        if (profileName) profileName.textContent = username;
 
         // Apply Theme
         const isLight = this.settings.theme === 'light';
