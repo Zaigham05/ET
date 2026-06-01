@@ -1088,15 +1088,38 @@ class SpendWise {
         const totalBorrowed = monthlyData.filter(t => t.type === 'Borrow').reduce((s, t) => s + t.amount, 0);
         const totalPaidback = monthlyData.filter(t => t.type === 'Payback').reduce((s, t) => s + t.amount, 0);
 
+        // Parse current selector month & year
+        const selectedPeriod = this.monthSelector.value || '';
+        const [selMonth, selYear] = selectedPeriod.split(' ');
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const selMonthIdx = monthNames.indexOf(selMonth);
+        const targetYear = parseInt(selYear, 10) || new Date().getFullYear();
+        const targetMonthIdx = selMonthIdx !== -1 ? selMonthIdx : new Date().getMonth();
+
+        // Calculate all-time transactions up to the end of the selected month
+        const cumulativeTransactions = (this.transactions || []).filter(t => {
+            const tDate = new Date(t.date);
+            const tMonth = tDate.getMonth();
+            const tYear = tDate.getFullYear();
+            return tYear < targetYear || (tYear === targetYear && tMonth <= targetMonthIdx);
+        });
+
+        // Cumulative cash calculations for cash in hand
+        const cumIncome = cumulativeTransactions.filter(t => t.type === 'Income').reduce((s, t) => s + t.amount, 0);
+        const cumSpent = cumulativeTransactions.filter(t => t.type === 'Expense').reduce((s, t) => s + t.amount, 0);
+        const cumLent = cumulativeTransactions.filter(t => t.type === 'Lend').reduce((s, t) => s + t.amount, 0);
+        const cumRepaid = cumulativeTransactions.filter(t => t.type === 'Repay').reduce((s, t) => s + t.amount, 0);
+        const cumBorrowed = cumulativeTransactions.filter(t => t.type === 'Borrow').reduce((s, t) => s + t.amount, 0);
+        const cumPaidback = cumulativeTransactions.filter(t => t.type === 'Payback').reduce((s, t) => s + t.amount, 0);
+
+        const cashInHand = (cumIncome + cumBorrowed + cumRepaid) - (cumSpent + cumLent + cumPaidback);
+        this.cashInHand = cashInHand;
+
         let netLent, netBorrowed, totalDebtBalance;
         if (this.settings.carryForwardDebt !== false) {
-            // All-time outstanding debt
-            const allLent = this.transactions.filter(t => t.type === 'Lend').reduce((s, t) => s + t.amount, 0);
-            const allRepaid = this.transactions.filter(t => t.type === 'Repay').reduce((s, t) => s + t.amount, 0);
-            const allBorrowed = this.transactions.filter(t => t.type === 'Borrow').reduce((s, t) => s + t.amount, 0);
-            const allPaidback = this.transactions.filter(t => t.type === 'Payback').reduce((s, t) => s + t.amount, 0);
-            netLent = allLent - allRepaid;
-            netBorrowed = allBorrowed - allPaidback;
+            // Cumulative outstanding debt up to selected month
+            netLent = cumLent - cumRepaid;
+            netBorrowed = cumBorrowed - cumPaidback;
             totalDebtBalance = netLent - netBorrowed;
         } else {
             // Monthly-only debt
@@ -1104,11 +1127,6 @@ class SpendWise {
             netBorrowed = totalBorrowed - totalPaidback;
             totalDebtBalance = netLent - netBorrowed;
         }
-
-        // Cash In Hand Calculation (Actual liquidity)
-        // Cash = (Income + Borrow + Repay) - (Expense + Lend + Payback)
-        const cashInHand = (totalIncome + totalBorrowed + totalRepaid) - (totalSpent + totalLent + totalPaidback);
-        this.cashInHand = cashInHand;
 
         // Calculate monthly needed goals savings
         const today = new Date();
@@ -4221,17 +4239,25 @@ class SpendWise {
         this.saveToCloud();
         this.render && this.render();
         this.updateUI();
+        this.checkNewCycleStart();
         this.showToast(`Budget cycle now starts on day ${day} of each month.`, 'success');
     }
 
     checkNewCycleStart() {
         const today = new Date();
         const cycleStartDay = parseInt(this.settings.cycleStartDay || '1', 10);
+        
         let activeCycleStart = new Date(today.getFullYear(), today.getMonth(), cycleStartDay);
         if (today < activeCycleStart) {
             activeCycleStart.setMonth(activeCycleStart.getMonth() - 1);
         }
         const currentCycleId = `${activeCycleStart.getFullYear()}-${activeCycleStart.getMonth() + 1}`;
+
+        if (!this.settings.hasOwnProperty('lastCyclePrompt')) {
+            this.settings.lastCyclePrompt = currentCycleId;
+            this.setLocal('settings', JSON.stringify(this.settings));
+            return;
+        }
 
         if (this.settings.lastCyclePrompt !== currentCycleId) {
             this.showCycleTransitionModal(activeCycleStart, currentCycleId);
