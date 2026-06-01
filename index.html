@@ -1930,6 +1930,96 @@
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
 
+    <!-- Modal for Budget Cycle Transition & Carry-Forward -->
+    <div id="cycle-start-modal" class="modal">
+        <div class="modal-content glass" style="max-width: 550px; border-radius: 24px; padding: 2rem;">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 1rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="display: flex; align-items: center; gap: 10px; font-size: 1.4rem; color: var(--text-main); margin: 0;">
+                    <i data-lucide="refresh-cw" style="color: var(--primary); width: 24px; height: 24px; animation: spin 4s linear infinite;"></i>
+                    <span>Cycle Transition Portal</span>
+                </h2>
+                <button class="close-modal" id="close-cycle-start-modal" style="font-size: 1.5rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">&times;</button>
+            </div>
+            
+            <div class="modal-body" style="color: var(--text-main); font-size: 0.95rem;">
+                <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1.5rem;">A new budget cycle has started! Let's reconcile your previous leftovers and outstanding balances.</p>
+                
+                <!-- Cash Carry Forward Card -->
+                <div class="glass" style="padding: 1.25rem; border-radius: 16px; margin-bottom: 1.5rem; border: 1px solid rgba(0, 229, 255, 0.15);">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                        <i data-lucide="banknote" style="color: var(--primary); width: 20px; height: 20px;"></i>
+                        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">Leftover Cash-in-Hand</h3>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <span class="text-muted" style="font-size: 0.85rem;">Previous Cycle Balance:</span>
+                        <span id="cycle-start-cash-amount" style="font-size: 1.2rem; font-weight: 700; color: #00ff88;">PKR 0</span>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px;">How would you like to allocate this cash?</label>
+                        <select id="cycle-cash-action" onchange="app.handleCycleCashActionChange(this.value)" style="width: 100%; padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--bg-card); color: var(--text-main); font-family: inherit;">
+                            <option value="carry">Carry Forward Entire Balance (Keep Liquid)</option>
+                            <option value="save">Save Entire Balance to Gullak Vault</option>
+                            <option value="split">Split Balance (Carry Forward & Save)</option>
+                        </select>
+                    </div>
+
+                    <!-- Gullak Selector -->
+                    <div id="cycle-gullak-select-group" class="form-group" style="margin-bottom: 1rem; display: none;">
+                        <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px;">Select Gullak jar to drop coins into:</label>
+                        <select id="cycle-gullak-target" style="width: 100%; padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--bg-card); color: var(--text-main); font-family: inherit;">
+                            <!-- Active Goals Populated Dynamically -->
+                        </select>
+                    </div>
+
+                    <!-- Split Allocations -->
+                    <div id="cycle-split-group" style="display: none; margin-bottom: 1rem; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid var(--glass-border);">
+                        <div style="margin-bottom: 1rem;">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px;">
+                                <span class="text-muted">Carry Forward (Liquid):</span>
+                                <span id="cycle-split-carry-val" style="font-weight: 700; color: #00ff88;">PKR 0</span>
+                            </div>
+                            <input type="range" id="cycle-split-slider" min="0" max="100" value="50" style="width: 100%; cursor: pointer;" oninput="app.updateCycleSplitValues()">
+                        </div>
+                        <div style="margin-bottom: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px;">
+                                <span class="text-muted">Save to Gullak:</span>
+                                <span id="cycle-split-save-val" style="font-weight: 700; color: var(--primary);">PKR 0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lend / Debt Carry Forward Card -->
+                <div class="glass" style="padding: 1.25rem; border-radius: 16px; margin-bottom: 1.5rem; border: 1px solid rgba(168, 85, 247, 0.15);">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                        <i data-lucide="landmark" style="color: #a855f7; width: 20px; height: 20px;"></i>
+                        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">Active Lend / Debt</h3>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <span class="text-muted" style="font-size: 0.85rem;">Outstanding Debt Balance:</span>
+                        <span id="cycle-start-debt-amount" style="font-size: 1.2rem; font-weight: 700; color: #ec4899;">PKR 0</span>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0;">
+                        <div>
+                            <span style="font-size: 0.85rem; font-weight: 600; display: block;">Carry forward outstanding debts?</span>
+                            <span class="text-muted" style="font-size: 0.75rem;">Keeps all unpaid lend/debt visible on dashboard.</span>
+                        </div>
+                        <label class="switch-toggle" style="position: relative; display: inline-block; width: 44px; height: 24px;">
+                            <input type="checkbox" id="cycle-debt-carry-toggle" checked style="opacity: 0; width: 0; height: 0;">
+                            <span class="switch-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.1); border-radius: 24px; transition: 0.3s; border: 1px solid var(--glass-border);"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 12px; margin-top: 2rem;">
+                    <button class="btn-secondary" id="cycle-postpone-btn" style="flex: 1; justify-content: center; height: 42px;">Decide Later</button>
+                    <button class="btn-primary" onclick="app.executeCycleTransition()" style="flex: 1.5; justify-content: center; height: 42px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border: none; font-weight: 600; cursor: pointer; border-radius: 12px;">Apply & Start Cycle</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal for Confirmation -->
     <div id="confirm-modal" class="modal">
         <div class="modal-content glass confirm-content">

@@ -245,6 +245,7 @@ class SpendWise {
         this.updateUI();
         this.startTickerSystem();
         this.updateMobileFab('dashboard');
+        setTimeout(() => this.checkNewCycleStart(), 800);
     }
 
 
@@ -658,8 +659,18 @@ class SpendWise {
                 this.toggleModal(this.expenseModal, false);
                 this.toggleModal(this.budgetModal, false);
                 this.toggleModal(this.categoryModal, false);
+                this.toggleModal(document.getElementById('cycle-start-modal'), false);
             });
         });
+
+        const closeCycleModalBtn = document.getElementById('close-cycle-start-modal');
+        if (closeCycleModalBtn) {
+            closeCycleModalBtn.addEventListener('click', () => this.toggleModal(document.getElementById('cycle-start-modal'), false));
+        }
+        const postponeCycleBtn = document.getElementById('cycle-postpone-btn');
+        if (postponeCycleBtn) {
+            postponeCycleBtn.addEventListener('click', () => this.toggleModal(document.getElementById('cycle-start-modal'), false));
+        }
 
         window.addEventListener('click', (e) => {
             if (e.target.classList.contains('modal')) {
@@ -1077,9 +1088,22 @@ class SpendWise {
         const totalBorrowed = monthlyData.filter(t => t.type === 'Borrow').reduce((s, t) => s + t.amount, 0);
         const totalPaidback = monthlyData.filter(t => t.type === 'Payback').reduce((s, t) => s + t.amount, 0);
 
-        const netLent = totalLent - totalRepaid;
-        const netBorrowed = totalBorrowed - totalPaidback;
-        const totalDebtBalance = netLent - netBorrowed; // Positive means you are owed, negative means you owe
+        let netLent, netBorrowed, totalDebtBalance;
+        if (this.settings.carryForwardDebt !== false) {
+            // All-time outstanding debt
+            const allLent = this.transactions.filter(t => t.type === 'Lend').reduce((s, t) => s + t.amount, 0);
+            const allRepaid = this.transactions.filter(t => t.type === 'Repay').reduce((s, t) => s + t.amount, 0);
+            const allBorrowed = this.transactions.filter(t => t.type === 'Borrow').reduce((s, t) => s + t.amount, 0);
+            const allPaidback = this.transactions.filter(t => t.type === 'Payback').reduce((s, t) => s + t.amount, 0);
+            netLent = allLent - allRepaid;
+            netBorrowed = allBorrowed - allPaidback;
+            totalDebtBalance = netLent - netBorrowed;
+        } else {
+            // Monthly-only debt
+            netLent = totalLent - totalRepaid;
+            netBorrowed = totalBorrowed - totalPaidback;
+            totalDebtBalance = netLent - netBorrowed;
+        }
 
         // Cash In Hand Calculation (Actual liquidity)
         // Cash = (Income + Borrow + Repay) - (Expense + Lend + Payback)
@@ -4198,6 +4222,188 @@ class SpendWise {
         this.render && this.render();
         this.updateUI();
         this.showToast(`Budget cycle now starts on day ${day} of each month.`, 'success');
+    }
+
+    checkNewCycleStart() {
+        const today = new Date();
+        const cycleStartDay = parseInt(this.settings.cycleStartDay || '1', 10);
+        let activeCycleStart = new Date(today.getFullYear(), today.getMonth(), cycleStartDay);
+        if (today < activeCycleStart) {
+            activeCycleStart.setMonth(activeCycleStart.getMonth() - 1);
+        }
+        const currentCycleId = `${activeCycleStart.getFullYear()}-${activeCycleStart.getMonth() + 1}`;
+
+        if (this.settings.lastCyclePrompt !== currentCycleId) {
+            this.showCycleTransitionModal(activeCycleStart, currentCycleId);
+        }
+    }
+
+    showCycleTransitionModal(activeCycleStart, currentCycleId) {
+        const prevTransactions = (this.transactions || []).filter(t => new Date(t.date) < activeCycleStart);
+        
+        const totalIncome = prevTransactions.filter(t => t.type === 'Income').reduce((s, t) => s + t.amount, 0);
+        const totalSpent = prevTransactions.filter(t => t.type === 'Expense').reduce((s, t) => s + t.amount, 0);
+        const totalLent = prevTransactions.filter(t => t.type === 'Lend').reduce((s, t) => s + t.amount, 0);
+        const totalRepaid = prevTransactions.filter(t => t.type === 'Repay').reduce((s, t) => s + t.amount, 0);
+        const totalBorrowed = prevTransactions.filter(t => t.type === 'Borrow').reduce((s, t) => s + t.amount, 0);
+        const totalPaidback = prevTransactions.filter(t => t.type === 'Payback').reduce((s, t) => s + t.amount, 0);
+
+        const prevCashInHand = (totalIncome + totalBorrowed + totalRepaid) - (totalSpent + totalLent + totalPaidback);
+        this.tempPrevCashInHand = Math.max(0, prevCashInHand);
+
+        const prevNetLent = totalLent - totalRepaid;
+        const prevNetBorrowed = totalBorrowed - totalPaidback;
+        const prevDebtBalance = prevNetLent - prevNetBorrowed;
+        this.tempPrevDebtBalance = prevDebtBalance;
+
+        // Update Cash balance display
+        const cashAmountEl = document.getElementById('cycle-start-cash-amount');
+        if (cashAmountEl) {
+            cashAmountEl.textContent = this.formatCurrency(this.tempPrevCashInHand);
+        }
+
+        // Update Debt display
+        const debtEl = document.getElementById('cycle-start-debt-amount');
+        if (debtEl) {
+            if (prevDebtBalance > 0) {
+                debtEl.textContent = `PKR ${Math.abs(prevDebtBalance).toLocaleString()} (People Owe You)`;
+                debtEl.style.color = '#00ff88';
+            } else if (prevDebtBalance < 0) {
+                debtEl.textContent = `PKR ${Math.abs(prevDebtBalance).toLocaleString()} (You Owe People)`;
+                debtEl.style.color = '#ff4d6d';
+            } else {
+                debtEl.textContent = 'PKR 0 (No Active Debt)';
+                debtEl.style.color = 'var(--text-muted)';
+            }
+        }
+
+        // Populate Gullaks
+        const cycleGullakSelect = document.getElementById('cycle-gullak-target');
+        if (cycleGullakSelect) {
+            const activeGoals = (this.goals || []).filter(g => parseFloat(g.current || 0) < parseFloat(g.target || 0));
+            cycleGullakSelect.innerHTML = activeGoals.length > 0
+                ? activeGoals.map(g => `<option value="${g.id}">${g.title}</option>`).join('')
+                : '<option value="">No active Gullak goals found</option>';
+        }
+
+        // Initialize split slider
+        const slider = document.getElementById('cycle-split-slider');
+        if (slider) {
+            slider.max = this.tempPrevCashInHand;
+            slider.value = Math.round(this.tempPrevCashInHand / 2);
+        }
+        this.updateCycleSplitValues();
+
+        // Save target cycle ID
+        this.pendingCycleId = currentCycleId;
+
+        // Toggle Cash actions resets
+        const actionSelect = document.getElementById('cycle-cash-action');
+        if (actionSelect) actionSelect.value = 'carry';
+        this.handleCycleCashActionChange('carry');
+
+        // Toggle modal
+        const cycleModal = document.getElementById('cycle-start-modal');
+        if (cycleModal) {
+            this.toggleModal(cycleModal, true);
+        }
+    }
+
+    handleCycleCashActionChange(val) {
+        const gullakGroup = document.getElementById('cycle-gullak-select-group');
+        const splitGroup = document.getElementById('cycle-split-group');
+
+        if (gullakGroup) gullakGroup.style.display = (val === 'save' || val === 'split') ? 'block' : 'none';
+        if (splitGroup) splitGroup.style.display = (val === 'split') ? 'block' : 'none';
+    }
+
+    updateCycleSplitValues() {
+        const slider = document.getElementById('cycle-split-slider');
+        if (!slider) return;
+
+        const carryVal = parseFloat(slider.value) || 0;
+        const saveVal = Math.max(0, this.tempPrevCashInHand - carryVal);
+
+        const carryLabel = document.getElementById('cycle-split-carry-val');
+        const saveLabel = document.getElementById('cycle-split-save-val');
+
+        if (carryLabel) carryLabel.textContent = this.formatCurrency(carryVal);
+        if (saveLabel) saveLabel.textContent = this.formatCurrency(saveVal);
+    }
+
+    executeCycleTransition() {
+        const action = document.getElementById('cycle-cash-action').value;
+        const carryDebts = document.getElementById('cycle-debt-carry-toggle').checked;
+
+        if (this.tempPrevCashInHand > 0) {
+            if (action === 'carry') {
+                const newTx = {
+                    id: Date.now().toString(),
+                    type: 'Income',
+                    amount: this.tempPrevCashInHand,
+                    category: 'Other',
+                    date: new Date().toISOString().split('T')[0],
+                    note: '[Carry Forward] Cash in hand from previous cycle'
+                };
+                this.transactions.push(newTx);
+                this.logAction('CREATE', `Carry Forward: +${this.tempPrevCashInHand}`, 'Carried forward previous cycle leftovers.');
+            } else if (action === 'save') {
+                const targetGullakId = document.getElementById('cycle-gullak-target').value;
+                const goal = (this.goals || []).find(g => g.id === targetGullakId);
+                if (goal) {
+                    goal.current = parseFloat(goal.current || 0) + this.tempPrevCashInHand;
+                    this.logAction('ALLOCATE', `Gullak: ${goal.title}`, `Cycle Start: Swept ${this.formatCurrency(this.tempPrevCashInHand)} leftover cash.`);
+                    this.triggerCoinDrop(goal.id);
+                }
+            } else if (action === 'split') {
+                const slider = document.getElementById('cycle-split-slider');
+                const carryVal = parseFloat(slider.value) || 0;
+                const saveVal = Math.max(0, this.tempPrevCashInHand - carryVal);
+
+                if (carryVal > 0) {
+                    const newTx = {
+                        id: Date.now().toString(),
+                        type: 'Income',
+                        amount: carryVal,
+                        category: 'Other',
+                        date: new Date().toISOString().split('T')[0],
+                        note: '[Carry Forward] Liquid Cash split from previous cycle'
+                    };
+                    this.transactions.push(newTx);
+                    this.logAction('CREATE', `Carry Forward (Split): +${carryVal}`, 'Carried forward split cash leftovers.');
+                }
+                if (saveVal > 0) {
+                    const targetGullakId = document.getElementById('cycle-gullak-target').value;
+                    const goal = (this.goals || []).find(g => g.id === targetGullakId);
+                    if (goal) {
+                        goal.current = parseFloat(goal.current || 0) + saveVal;
+                        this.logAction('ALLOCATE', `Gullak: ${goal.title}`, `Cycle Start: Allocated split ${this.formatCurrency(saveVal)} leftover cash.`);
+                        this.triggerCoinDrop(goal.id);
+                    }
+                }
+            }
+        }
+
+        // Reconcile debts
+        this.settings.carryForwardDebt = carryDebts;
+        
+        // Save cycle prompt flag
+        this.settings.lastCyclePrompt = this.pendingCycleId;
+        this.setLocal('settings', JSON.stringify(this.settings));
+
+        // Save states
+        this.saveToLocal();
+        this.saveToCloud();
+
+        // Update screen
+        this.updateUI();
+
+        // User response feedback
+        this.showToast('Budget cycle transition completed successfully!', 'success');
+        this.playAudio('chime');
+
+        // Close modal
+        this.toggleModal(document.getElementById('cycle-start-modal'), false);
     }
 
     handleRolloverPolicyChange(val) {
