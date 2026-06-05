@@ -13,7 +13,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2.0.0">
 </head>
 <body>
     <!-- Premium Ambient Aura Mesh Background -->
@@ -937,9 +937,15 @@
             </section>
 
             <section id="view-analytics" class="view">
-                <div class="section-header">
-                    <h2>Financial Intelligence</h2>
-                    <p class="text-muted">In-depth analysis of your spending patterns</p>
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <h2>Financial Intelligence</h2>
+                        <p class="text-muted">In-depth analysis of your spending patterns</p>
+                    </div>
+                    <button class="btn-primary" id="open-report-studio-btn" style="background: linear-gradient(135deg, var(--secondary), #ff0055); border: none; box-shadow: 0 4px 15px rgba(255, 0, 85, 0.2); cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: 600;" onclick="app.openReportStudio()">
+                        <i data-lucide="printer" style="width: 16px; height: 16px;"></i>
+                        <span>Launch Report Studio</span>
+                    </button>
                 </div>
 
                 <!-- Extended Analytics Summary -->
@@ -2020,6 +2026,116 @@
         </div>
     </div>
 
+    <!-- Modal for Investor Report Studio -->
+    <div id="report-studio-modal" class="modal">
+        <div class="modal-content glass" style="max-width: 900px; border-radius: 24px; padding: 2rem;">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 1rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="display: flex; align-items: center; gap: 10px; font-size: 1.4rem; color: var(--text-main); margin: 0;">
+                    <i data-lucide="printer" style="color: var(--primary); width: 24px; height: 24px;"></i>
+                    <span>SpendWise Investor Report Studio</span>
+                </h2>
+                <button class="close-modal" id="close-report-studio-modal" style="font-size: 1.5rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">&times;</button>
+            </div>
+            
+            <div class="modal-body" style="color: var(--text-main); font-size: 0.95rem; display: grid; grid-template-columns: 1.2fr 1.8fr; gap: 1.5rem; align-items: start;">
+                <!-- Left Column: Settings -->
+                <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                    <div class="glass" style="padding: 1.25rem; border-radius: 16px; border: 1px solid var(--glass-border);">
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1.05rem; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="sliders" style="color: var(--primary); width: 18px; height: 18px;"></i>
+                            Configure Report
+                        </h3>
+                        
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px;">Select Target Period</label>
+                            <select id="report-period-selector" onchange="app.updateReportPreview()" style="width: 100%; padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--bg-card); color: var(--text-main); font-family: inherit;">
+                                <!-- Dynamic Months Populated via JS -->
+                            </select>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px;">Filter by Category</label>
+                            <select id="report-category-selector" onchange="app.updateReportPreview()" style="width: 100%; padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--bg-card); color: var(--text-main); font-family: inherit;">
+                                <option value="all">All Categories</option>
+                                <!-- Dynamic Categories Populated via JS -->
+                            </select>
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px;">Visual Theme Style</label>
+                            <select id="report-theme" style="width: 100%; padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--bg-card); color: var(--text-main); font-family: inherit;">
+                                <option value="dark">Premium Midnight Dark</option>
+                                <option value="light">Classic Clean Light</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="glass" style="padding: 1.25rem; border-radius: 16px; border: 1px solid var(--glass-border);">
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1.05rem; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="check-square" style="color: var(--primary); width: 18px; height: 18px;"></i>
+                            Include Sections
+                        </h3>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 0.85rem;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="rep-inc-balance" checked onchange="app.updateReportPreview()">
+                                <span>Balance Sheet & Ratios</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="rep-inc-debts" checked onchange="app.updateReportPreview()">
+                                <span>Debts by Person name</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="rep-inc-cashflow" checked onchange="app.updateReportPreview()">
+                                <span>Cash Flow & Pacing</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="rep-inc-gullaks" checked onchange="app.updateReportPreview()">
+                                <span>Gullak Savings Jars</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="rep-inc-wealth" checked onchange="app.updateReportPreview()">
+                                <span>Wealth Hub Portfolios</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="rep-inc-variance" checked onchange="app.updateReportPreview()">
+                                <span>Envelope Budget Variance</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="rep-inc-ledger" checked onchange="app.updateReportPreview()">
+                                <span>Detailed Transaction Ledger</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Right Column: Interactive HTML Preview -->
+                <div style="display: flex; flex-direction: column; gap: 1rem; width: 100%;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">Interactive Live Preview</span>
+                        <div style="display: flex; gap: 8px; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 8px; border: 1px solid var(--glass-border);">
+                            <button id="btn-prev-balance" onclick="app.switchReportPreviewTab('balance')" class="currency-toggle-btn active" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; border-radius: 6px; border: none; cursor: pointer;">Balance Sheet</button>
+                            <button id="btn-prev-variance" onclick="app.switchReportPreviewTab('variance')" class="currency-toggle-btn" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; border-radius: 6px; border: none; cursor: pointer;">Variance Ledger</button>
+                            <button id="btn-prev-ledger" onclick="app.switchReportPreviewTab('ledger')" class="currency-toggle-btn" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; border-radius: 6px; border: none; cursor: pointer;">Detailed Ledger</button>
+                        </div>
+                    </div>
+                    
+                    <div class="glass" id="report-preview-box" style="height: 320px; overflow-y: auto; padding: 1.25rem; border-radius: 16px; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--glass-border); font-size: 0.85rem;">
+                        <!-- Statements Rendered Dynamically in JS -->
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; margin-top: 1rem; justify-content: flex-end;">
+                        <button class="btn-secondary" onclick="app.toggleModal(document.getElementById('report-studio-modal'), false)" style="padding: 0.6rem 1.2rem; border-radius: 12px; height: 42px; cursor: pointer; border: 1px solid var(--glass-border); background: transparent; color: var(--text-main);">Close Studio</button>
+                        <button class="btn-primary" onclick="app.downloadInvestorReport()" style="padding: 0.6rem 1.6rem; border-radius: 12px; height: 42px; background: linear-gradient(135deg, var(--primary), var(--secondary)); font-weight: 600; display: flex; align-items: center; gap: 8px; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 229, 255, 0.25); color: #07090e;">
+                            <i data-lucide="file-text" style="width: 16px; height: 16px;"></i>
+                            <span>Compile & Export PDF</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal for Confirmation -->
     <div id="confirm-modal" class="modal">
         <div class="modal-content glass confirm-content">
@@ -2077,7 +2193,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-    <script src="script.js"></script>
+    <script src="script.js?v=2.2.0"></script>
     <script>
         lucide.createIcons();
     </script>
