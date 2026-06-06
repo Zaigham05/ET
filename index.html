@@ -195,6 +195,10 @@
                         </select>
                     </div>
                     <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
+                        <button class="btn-secondary" id="sovereign-shield-toggle" style="border: 1px solid rgba(0, 229, 255, 0.2); background: rgba(0, 229, 255, 0.05); color: #00e5ff; font-weight: 600; padding: 0.6rem 1.2rem; border-radius: 12px; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; transition: all 0.3s; font-size: 0.85rem;" onclick="window.app.toggleSovereignShield()">
+                            <i data-lucide="shield" style="width: 16px; height: 16px;" id="sovereign-shield-icon"></i>
+                            <span id="sovereign-shield-text">Shield Active</span>
+                        </button>
                         <button class="btn-primary pulse" id="add-expense-btn">
                             <i data-lucide="plus"></i>
                             <span>Add Transaction</span>
@@ -222,7 +226,7 @@
                             </div>
                             <div class="stat-info">
                                 <h3>Total Income</h3>
-                                <p class="stat-value" id="total-income">PKR 0</p>
+                                <p class="stat-value sovereign-shield" id="total-income">PKR 0</p>
                                 <span class="stat-change positive">Actual Money In</span>
                             </div>
                         </div>
@@ -232,7 +236,7 @@
                             </div>
                             <div class="stat-info">
                                 <h3>Total Spent</h3>
-                                <p class="stat-value" id="total-spent">PKR 0</p>
+                                <p class="stat-value sovereign-shield" id="total-spent">PKR 0</p>
                                 <span class="stat-change negative" id="spent-percentage">0% of budget</span>
                             </div>
                         </div>
@@ -242,7 +246,7 @@
                             </div>
                             <div class="stat-info">
                                 <h3>Cash in Hand</h3>
-                                <p class="stat-value" id="cash-in-hand">PKR 0</p>
+                                <p class="stat-value sovereign-shield" id="cash-in-hand">PKR 0</p>
                                 <span class="stat-change positive" id="cash-in-hand-subtitle">Current Liquidity</span>
                             </div>
                         </div>
@@ -253,7 +257,7 @@
                             </div>
                             <div class="stat-info">
                                 <h3>Allocated Budget</h3>
-                                <p class="stat-value" id="allocated-budget">PKR 0</p>
+                                <p class="stat-value sovereign-shield" id="allocated-budget">PKR 0</p>
                                 <span class="stat-change neutral">Set Limit</span>
                             </div>
                         </div>
@@ -265,7 +269,7 @@
                             </div>
                             <div class="stat-info">
                                 <h3>Safe Spending</h3>
-                                <p class="stat-value" id="total-budget" style="color: #00ff88;">PKR 0</p>
+                                <p class="stat-value sovereign-shield" id="total-budget" style="color: #00ff88;">PKR 0</p>
                                 <span class="stat-change positive" id="total-budget-subtitle">Gullaks Excluded</span>
                             </div>
                         </div>
@@ -275,7 +279,7 @@
                             </div>
                             <div class="stat-info">
                                 <h3>Lent / Debt</h3>
-                                <p class="stat-value" id="debt-balance">PKR 0</p>
+                                <p class="stat-value sovereign-shield" id="debt-balance">PKR 0</p>
                                 <span class="stat-change neutral" id="debt-status">No active lends</span>
                             </div>
                         </div>
@@ -487,7 +491,7 @@
                             <!-- Safety Reserve Card -->
                             <div class="glass" style="padding: 1rem; border-radius: 12px; border: 1px solid rgba(0, 229, 255, 0.1); background: rgba(0, 229, 255, 0.02);">
                                 <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 2px;">Predicted Cash-in-Hand (30d)</span>
-                                <h4 id="forecast-end-balance" style="font-size: 1.25rem; font-weight: 700; color: var(--text-main); margin-bottom: 4px;">PKR 0</h4>
+                                <h4 id="forecast-end-balance" class="sovereign-shield" style="font-size: 1.25rem; font-weight: 700; color: var(--text-main); margin-bottom: 4px;">PKR 0</h4>
                                 <p id="forecast-net-change" style="font-size: 0.75rem; font-weight: 600; color: #00ff88; margin: 0;">--</p>
                             </div>
                             
@@ -630,17 +634,17 @@
                 <div class="analytics-summary-grid" style="margin-bottom: 1.5rem;">
                     <div class="summary-stat glass wealth-card-silver">
                         <span class="label">Total Net Worth</span>
-                        <h4 id="wealth-net-worth">PKR 0</h4>
+                        <h4 id="wealth-net-worth" class="sovereign-shield">PKR 0</h4>
                         <p class="stat-trend positive" id="wealth-net-worth-change">Liquidity + Assets</p>
                     </div>
                     <div class="summary-stat glass wealth-card-gold">
                         <span class="label">Invested Capital</span>
-                        <h4 id="wealth-invested">PKR 0</h4>
+                        <h4 id="wealth-invested" class="sovereign-shield">PKR 0</h4>
                         <p class="stat-trend" id="wealth-invested-sub">Total Acquisition Cost</p>
                     </div>
                     <div class="summary-stat glass wealth-card-emerald">
                         <span class="label">Current Portfolio Value</span>
-                        <h4 id="wealth-current-val">PKR 0</h4>
+                        <h4 id="wealth-current-val" class="sovereign-shield">PKR 0</h4>
                         <p class="stat-trend positive" id="wealth-total-return">+0.00% Net Yield</p>
                     </div>
                     <div class="summary-stat glass wealth-card-bronze">
@@ -1305,7 +1309,15 @@
                             <label>Profile Name</label>
                             <input type="text" id="settings-username" value="Mr Hacker">
                         </div>
-                        <button class="btn-primary" onclick="app.updateProfile()">Update Profile</button>
+                        <div class="form-group" style="margin-top: 12px;">
+                            <label>Bank Account Detail (For Bill Sharing)</label>
+                            <input type="text" id="settings-user-account" placeholder="e.g. Bank Alfalah, A/C: 1234-5678">
+                        </div>
+                        <div class="form-group" style="margin-top: 12px;">
+                            <label>WhatsApp Number (For Receipts)</label>
+                            <input type="text" id="settings-user-whatsapp" placeholder="e.g. +92 300 1234567">
+                        </div>
+                        <button class="btn-primary" onclick="app.updateProfile()" style="margin-top: 12px;">Update Profile</button>
                     </div>
 
                     <!-- Security Center Card -->
@@ -1474,6 +1486,18 @@
                 <h2>Add New Expense</h2>
                 <button class="close-modal">&times;</button>
             </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; padding:8px 12px; border-radius:10px; background:rgba(0, 229, 255, 0.05); border:1px solid rgba(0, 229, 255, 0.25);">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <i data-lucide="mic" style="color:#00e5ff; width:16px; height:16px;"></i>
+                    <span style="font-size:0.8rem; font-weight:700; color:#00e5ff;">Voice Dictation Hub</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <canvas id="voice-visualizer" width="120" height="24" style="border-radius:4px; background:rgba(0,0,0,0.2); display:none;"></canvas>
+                    <button type="button" id="voice-mic-btn" style="border:none; border-radius:50%; width:32px; height:32px; background:linear-gradient(135deg, #00e5ff, #00b3ff); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 0 10px rgba(0,229,255,0.4); transition:transform 0.2s;" onclick="app.toggleVoiceTransaction()">
+                        <i data-lucide="mic" style="width:16px; height:16px;" id="mic-icon-state"></i>
+                    </button>
+                </div>
+            </div>
             <form id="transaction-form">
                 <div class="form-row">
                     <div class="form-group">
@@ -1625,7 +1649,7 @@
             <form id="cash-adjustment-form">
                 <div class="form-group" style="margin-bottom: 1.25rem;">
                     <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">System Calculated Balance</label>
-                    <div style="font-size: 1.5rem; font-weight: 800; color: var(--text-muted);" id="cash-calculated-balance">PKR 0</div>
+                    <div style="font-size: 1.5rem; font-weight: 800; color: var(--text-muted);" id="cash-calculated-balance" class="sovereign-shield">PKR 0</div>
                 </div>
                 <div class="form-group" style="margin-bottom: 1.5rem;">
                     <label for="cash-actual-amount" style="font-size: 0.8rem; color: var(--text-main); display: block; margin-bottom: 0.5rem; font-weight: 600;">Actual Physical Cash (PKR)</label>
@@ -2184,6 +2208,14 @@
         </div>
     </div>
 
+    <!-- Calendar Tooltip & Confetti Canvas -->
+    <div id="calendar-tooltip" class="glass" style="position: fixed; display: none; pointer-events: none; z-index: 10000; padding: 12px; border-radius: 12px; border: 1px solid rgba(0, 229, 255, 0.25); background: rgba(15, 23, 42, 0.95); width: 240px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(0, 229, 255, 0.15); transition: opacity 0.15s ease; opacity: 0; font-family: 'Inter', sans-serif;">
+        <div style="font-weight: 700; font-size: 0.85rem; color: #00e5ff; margin-bottom: 6px;" id="tooltip-date">Date</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px;" id="tooltip-stats"></div>
+        <canvas id="tooltip-canvas" width="216" height="80" style="margin-top: 8px; background: rgba(255,255,255,0.01); border-radius: 6px;"></canvas>
+    </div>
+    <canvas id="quest-confetti-canvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 999999;"></canvas>
+
     <!-- Firebase Integration -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
@@ -2193,7 +2225,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-    <script src="script.js?v=2.2.0"></script>
+    <script src="script.js?v=2.2.1"></script>
     <script>
         lucide.createIcons();
     </script>

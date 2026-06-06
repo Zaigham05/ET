@@ -5317,8 +5317,93 @@ select option {
     color: #ff4d6d;
 }
 
+/* ==========================================================================
+   Premium UI/UX Enhancements
+   ========================================================================== */
 
+/* 1. Sovereign Shield (Privacy & Blur Mode) */
+.sovereign-shield {
+    transition: filter 0.3s ease, opacity 0.3s ease;
+}
+body.shield-active .sovereign-shield {
+    filter: blur(8px) !important;
+}
+body.shield-active .sovereign-shield:hover {
+    filter: blur(0px) !important;
+}
 
+/* 2. Real-Time Sparklines & Wealth Tickers Row Flash */
+@keyframes flashGain {
+    0% { background-color: rgba(0, 255, 136, 0.15); }
+    100% { background-color: transparent; }
+}
+@keyframes flashLoss {
+    0% { background-color: rgba(255, 77, 109, 0.15); }
+    100% { background-color: transparent; }
+}
+.pulse-gain {
+    animation: flashGain 0.8s ease;
+}
+.pulse-loss {
+    animation: flashLoss 0.8s ease;
+}
 
+/* 3. Interactive Quest Node Map */
+@keyframes svgPulse {
+    0% { filter: drop-shadow(0 0 2px rgba(0, 229, 255, 0.4)); }
+    50% { filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.8)); }
+    100% { filter: drop-shadow(0 0 2px rgba(0, 229, 255, 0.4)); }
+}
+.node-pulsing {
+    animation: svgPulse 2.5s infinite ease-in-out;
+}
+.quest-node:hover circle {
+    stroke-width: 3.5px;
+    transform: scale(1.04);
+    transform-origin: center;
+    transition: all 0.2s ease;
+}
 
+/* 4. Ambient Visuals & Micro-Animations */
+button:active,
+.btn-primary:active,
+.btn-secondary:active,
+.nav-link:active,
+.mobile-tab:active,
+.stat-card.clickable:active,
+.card:active,
+.action-btn:active,
+.icon-btn:active,
+.btn-submit:active {
+    transform: scale(0.97) !important;
+}
 
+/* Custom view cross-fade override */
+.view {
+    display: none;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1), transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.view.active {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Ambient background aura pulsing */
+@keyframes auraPulse {
+    0% { opacity: 0.6; transform: scale(1) translate(0px, 0px); }
+    50% { opacity: 0.85; transform: scale(1.08) translate(-10px, 10px); }
+    100% { opacity: 0.6; transform: scale(1) translate(0px, 0px); }
+}
+.aura-background-mesh {
+    position: fixed;
+    top: -10%; left: -10%; width: 120vw; height: 120vh;
+    pointer-events: none;
+    z-index: -2;
+    background: radial-gradient(circle at 15% 15%, rgba(var(--primary-rgb), 0.07) 0%, transparent 45%),
+                radial-gradient(circle at 85% 85%, rgba(var(--secondary-rgb), 0.07) 0%, transparent 45%);
+    animation: auraPulse 22s infinite ease-in-out;
+    transition: background 1s ease;
+}

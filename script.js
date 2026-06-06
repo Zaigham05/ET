@@ -44,7 +44,7 @@ class SpendWise {
             const sidebar = document.getElementById('main-sidebar');
             if (sidebar) sidebar.style.display = 'none';
 
-            if (window.location.search.includes('test=true') || window.location.search.includes('test-true')) {
+            if (window.location.search.includes('test=true') || window.location.search.includes('test-true') || window.location.search.includes('mock-user=true')) {
                 console.log("Mocking test user for automated testing (Immediate)...");
                 this.currentUser = { uid: 'test_user', email: 'test@example.com' };
                 this.vaultId = 'spendwise-test_user-vault';
@@ -236,10 +236,14 @@ class SpendWise {
             username: this.currentUser.email.split('@')[0],
             accent: '#00e5ff',
             theme: 'dark',
-            currency: 'USD'
+            currency: 'USD',
+            userAccount: '',
+            userWhatsapp: '',
+            shieldActive: false
         };
         if (!this.settings.aura) this.settings.aura = 'cyberpunk-teal';
         if (!this.settings.cycleStartDay) this.settings.cycleStartDay = '1';
+        if (this.settings.shieldActive === undefined) this.settings.shieldActive = false;
 
         this.auditLog = JSON.parse(localStorage.getItem(prefix + 'auditLog')) || [];
         this.lastTransactionId = parseInt(localStorage.getItem(prefix + 'lastTransactionId')) || 0;
@@ -1452,7 +1456,7 @@ class SpendWise {
                         <button class="action-btn edit" onclick="app.editTransaction(${t.id})"><i data-lucide="edit-3"></i></button>
                         <button class="action-btn delete" onclick="app.deleteTransaction(${t.id})"><i data-lucide="trash-2"></i></button>
                     </div>
-                    <p class="item-amount ${isOut ? 'negative' : 'positive'}">${isOut ? '-' : '+'}${this.formatCurrency(t.amount)}</p>
+                    <p class="item-amount sovereign-shield ${isOut ? 'negative' : 'positive'}">${isOut ? '-' : '+'}${this.formatCurrency(t.amount)}</p>
                 </div>
             </div>
         `;
@@ -1703,10 +1707,10 @@ class SpendWise {
                     <div>
                         <div class="goal-financials">
                             <div>
-                                <span class="goal-saved" style="color: ${activeColor};">${this.formatCurrency(current)}</span>
+                                <span class="goal-saved sovereign-shield" style="color: ${activeColor};">${this.formatCurrency(current)}</span>
                             </div>
                             <div class="goal-target-val">
-                                Milestone: <span>${this.formatCurrency(target)}</span>
+                                Milestone: <span class="sovereign-shield">${this.formatCurrency(target)}</span>
                             </div>
                         </div>
                         <div class="progress-bar-bg" style="height: 8px; border-radius: 99px; background: rgba(255, 255, 255, 0.05); overflow: hidden; position: relative;">
@@ -3536,18 +3540,25 @@ class SpendWise {
             });
         }
 
-        this.aiRecommendsListEl.innerHTML = insights.map(i => `
+        this.aiRecommendsListEl.innerHTML = insights.map((i, idx) => `
             <div class="ai-card glass ${i.type}">
                 <div class="ai-card-header">
                     <i data-lucide="${i.icon}"></i>
                     <span>${i.title}</span>
                 </div>
-                <div class="ai-card-body">${i.message}</div>
+                <div class="ai-card-body" id="ai-body-${idx}" style="min-height: 40px; position: relative; z-index: 10;"></div>
                 <div class="ai-action-text">STRATEGY: FOCUS HERE</div>
             </div>
         `).join('');
 
         if (window.lucide) lucide.createIcons();
+
+        insights.forEach((i, idx) => {
+            const bodyEl = document.getElementById(`ai-body-${idx}`);
+            if (bodyEl) {
+                this.typewriteText(bodyEl, i.message);
+            }
+        });
     }
 
     renderDebtVault() {
@@ -3682,7 +3693,8 @@ class SpendWise {
     generateDebtReceiptCanvas(name, balance) {
         const canvas = document.createElement('canvas');
         canvas.width = 600;
-        canvas.height = 400;
+        const hasInstructions = balance > 0 && (this.settings.userAccount || this.settings.userWhatsapp);
+        canvas.height = hasInstructions ? 480 : 400;
         const ctx = canvas.getContext('2d');
 
         const drawRoundRect = (c, x, y, w, h, r) => {
@@ -3698,11 +3710,11 @@ class SpendWise {
         };
 
         // 1. Draw premium dark card background
-        const bgGrad = ctx.createLinearGradient(0, 0, 600, 400);
+        const bgGrad = ctx.createLinearGradient(0, 0, 600, canvas.height);
         bgGrad.addColorStop(0, '#0f0f1b');
         bgGrad.addColorStop(1, '#181829');
         ctx.fillStyle = bgGrad;
-        drawRoundRect(ctx, 0, 0, 600, 400, 24);
+        drawRoundRect(ctx, 0, 0, 600, canvas.height, 24);
         ctx.fill();
 
         // 2. Draw colorful radial glow in top right
@@ -3715,10 +3727,10 @@ class SpendWise {
             radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
         }
         ctx.fillStyle = radialGlow;
-        ctx.fillRect(0, 0, 600, 400);
+        ctx.fillRect(0, 0, 600, canvas.height);
 
         // 3. Draw thin glowing card border
-        const borderGrad = ctx.createLinearGradient(0, 0, 600, 400);
+        const borderGrad = ctx.createLinearGradient(0, 0, 600, canvas.height);
         if (balance > 0) {
             borderGrad.addColorStop(0, 'rgba(0, 229, 255, 0.4)');
             borderGrad.addColorStop(0.5, 'rgba(0, 255, 136, 0.2)');
@@ -3730,7 +3742,7 @@ class SpendWise {
         }
         ctx.strokeStyle = borderGrad;
         ctx.lineWidth = 2.5;
-        drawRoundRect(ctx, 1.25, 1.25, 597.5, 397.5, 24);
+        drawRoundRect(ctx, 1.25, 1.25, 597.5, canvas.height - 2.5, 24);
         ctx.stroke();
 
         // 4. Draw Avatar Circle & Initials
@@ -3826,17 +3838,49 @@ class SpendWise {
         ctx.fillText(wording, 300, 250);
 
         // 10. Draw Receipt cut-out dashed line
+        const dashY = hasInstructions ? 310 : 295;
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([8, 6]);
         ctx.beginPath();
-        ctx.moveTo(30, 295);
-        ctx.lineTo(570, 295);
+        ctx.moveTo(30, dashY);
+        ctx.lineTo(570, dashY);
         ctx.stroke();
         ctx.setLineDash([]); // Reset dash
 
+        // 10.5 Draw Payment instructions card
+        if (hasInstructions) {
+            const payBoxY = 328;
+            const payBoxH = 75;
+            ctx.fillStyle = 'rgba(0, 229, 255, 0.03)';
+            ctx.strokeStyle = 'rgba(0, 229, 255, 0.15)';
+            ctx.lineWidth = 1;
+            drawRoundRect(ctx, 35, payBoxY, 530, payBoxH, 12);
+            ctx.fill();
+            ctx.stroke();
+
+            const uName = this.settings.username || 'User';
+            const uAcc = this.settings.userAccount || 'Not configured (Set in settings)';
+            const uPhone = this.settings.userWhatsapp || 'Not configured (Set in settings)';
+
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            
+            ctx.fillStyle = '#00e5ff';
+            ctx.font = 'bold 10px Inter, sans-serif';
+            ctx.fillText('PAYMENT INSTRUCTIONS', 50, payBoxY + 18);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '600 11.5px Inter, sans-serif';
+            ctx.fillText(`Account: ${uAcc} (${uName})`, 50, payBoxY + 38);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.font = '500 10px Inter, sans-serif';
+            ctx.fillText(`Please send amount above & share receipt on WhatsApp to: ${uPhone}`, 50, payBoxY + 56);
+        }
+
         // 11. Draw Footer Brand info & Stamp
-        const footerY = 345;
+        const footerY = hasInstructions ? 440 : 345;
         
         // Brand logo diamond icon
         const logoX = 145;
@@ -3891,9 +3935,24 @@ class SpendWise {
         
         // 2. Formulate the dynamic text message
         const amountStr = this.formatCurrency(Math.abs(balance));
+        const uName = this.settings.username || 'User';
+        const uAcc = this.settings.userAccount || '';
+        const uPhone = this.settings.userWhatsapp || '';
+
         let shareText = '';
         if (balance > 0) {
-            shareText = `Hi ${name}, just a friendly update from SpendWise. Currently, you owe me ${amountStr}. Let's settle up soon! 🧾`;
+            shareText = `Hi ${name}, just a friendly update from SpendWise. Currently, you owe me ${amountStr}.`;
+            if (uAcc) {
+                shareText += ` Please send amount to ${uAcc} (${uName})`;
+                if (uPhone) {
+                    shareText += ` & share receipt on WhatsApp to ${uPhone}.`;
+                } else {
+                    shareText += `.`;
+                }
+            } else if (uPhone) {
+                shareText += ` Please share receipt on WhatsApp to ${uPhone}.`;
+            }
+            shareText += ` Let's settle up soon! 🧾`;
         } else {
             shareText = `Hi ${name}, just a friendly update from SpendWise. Currently, I owe you ${amountStr}. Let's settle up soon! 💳`;
         }
@@ -4031,12 +4090,27 @@ class SpendWise {
         const shareOwed = parseFloat(split.totalCost) / (split.members.length + 1);
         const shareOwedStr = this.formatCurrency(shareOwed);
         
+        const uName = this.settings.username || 'User';
+        const uAcc = this.settings.userAccount || '';
+        const uPhone = this.settings.userWhatsapp || '';
+
         let shareText = '';
         if (split.status === 'Settled') {
             shareText = `Hey everyone! The bill "${split.title}" (Total: ${totalCostStr}) is now fully settled! Thank you! 🎉`;
         } else {
             const pendingMembers = split.members.filter(m => !(split.settledMembers || []).includes(m));
-            shareText = `Hey! Just a quick bill summary for "${split.title}" (Total: ${totalCostStr}). Each share is ${shareOwedStr}. Pending members: ${pendingMembers.join(', ')}. Let's settle up on SpendWise! 💸`;
+            shareText = `Hey! Just a quick bill summary for "${split.title}" (Total: ${totalCostStr}). Each share is ${shareOwedStr}. Pending members: ${pendingMembers.join(', ')}.`;
+            if (uAcc) {
+                shareText += ` Please send amount to ${uAcc} (${uName})`;
+                if (uPhone) {
+                    shareText += ` & share receipt on WhatsApp to ${uPhone}.`;
+                } else {
+                    shareText += `.`;
+                }
+            } else if (uPhone) {
+                shareText += ` Please share receipt on WhatsApp to ${uPhone}.`;
+            }
+            shareText += ` Let's settle up on SpendWise! 💸`;
         }
 
         btnWhatsapp.onclick = async () => {
@@ -4134,7 +4208,7 @@ class SpendWise {
     generateSplitBillCanvas(split) {
         const canvas = document.createElement('canvas');
         canvas.width = 600;
-        canvas.height = 400;
+        canvas.height = 480;
         const ctx = canvas.getContext('2d');
 
         const drawRoundRect = (c, x, y, w, h, r) => {
@@ -4150,15 +4224,15 @@ class SpendWise {
         };
 
         // 1. Draw premium dark card background
-        const bgGrad = ctx.createLinearGradient(0, 0, 600, 400);
+        const bgGrad = ctx.createLinearGradient(0, 0, 600, 480);
         bgGrad.addColorStop(0, '#0f0f1b');
         bgGrad.addColorStop(1, '#181829');
         ctx.fillStyle = bgGrad;
-        drawRoundRect(ctx, 0, 0, 600, 400, 24);
+        drawRoundRect(ctx, 0, 0, 600, 480, 24);
         ctx.fill();
 
         // 2. Draw colorful radial glow in top right
-        const radialGlow = ctx.createRadialGradient(480, 80, 0, 480, 80, 250);
+        const radialGlow = ctx.createRadialGradient(480, 80, 0, 480, 80, 300);
         const isSettled = split.status === 'Settled';
         if (isSettled) {
             radialGlow.addColorStop(0, 'rgba(0, 255, 136, 0.12)');
@@ -4168,10 +4242,10 @@ class SpendWise {
             radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
         }
         ctx.fillStyle = radialGlow;
-        ctx.fillRect(0, 0, 600, 400);
+        ctx.fillRect(0, 0, 600, 480);
 
         // 3. Draw thin glowing card border
-        const borderGrad = ctx.createLinearGradient(0, 0, 600, 400);
+        const borderGrad = ctx.createLinearGradient(0, 0, 600, 480);
         if (isSettled) {
             borderGrad.addColorStop(0, 'rgba(0, 255, 136, 0.4)');
             borderGrad.addColorStop(0.5, 'rgba(0, 179, 255, 0.2)');
@@ -4183,7 +4257,7 @@ class SpendWise {
         }
         ctx.strokeStyle = borderGrad;
         ctx.lineWidth = 2.5;
-        drawRoundRect(ctx, 1.25, 1.25, 597.5, 397.5, 24);
+        drawRoundRect(ctx, 1.25, 1.25, 597.5, 477.5, 24);
         ctx.stroke();
 
         // 4. Draw Avatar Circle & Category Initials
@@ -4332,8 +4406,37 @@ class SpendWise {
         ctx.stroke();
         ctx.setLineDash([]);
 
+        // 10.5 Draw Payment instructions card
+        const payBoxY = 328;
+        const payBoxH = 75;
+        ctx.fillStyle = 'rgba(0, 229, 255, 0.03)';
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.15)';
+        ctx.lineWidth = 1;
+        drawRoundRect(ctx, 35, payBoxY, 530, payBoxH, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        const uName = this.settings.username || 'User';
+        const uAcc = this.settings.userAccount || 'Not configured (Set in settings)';
+        const uPhone = this.settings.userWhatsapp || 'Not configured (Set in settings)';
+
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        
+        ctx.fillStyle = '#00e5ff';
+        ctx.font = 'bold 10px Inter, sans-serif';
+        ctx.fillText('PAYMENT INSTRUCTIONS', 50, payBoxY + 18);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '600 11.5px Inter, sans-serif';
+        ctx.fillText(`Account: ${uAcc} (${uName})`, 50, payBoxY + 38);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.font = '500 10px Inter, sans-serif';
+        ctx.fillText(`Please send amount above & share receipt on WhatsApp to: ${uPhone}`, 50, payBoxY + 56);
+
         // 11. Draw Footer Brand info & Stamp
-        const footerY = 355;
+        const footerY = 440;
         
         const logoX = 145;
         ctx.fillStyle = '#00ff88';
@@ -4479,12 +4582,20 @@ class SpendWise {
             const amountClass = net > 0 ? 'income' : net < 0 ? 'expense' : '';
             const amountText = net !== 0 ? this.formatCurrency(Math.abs(net)) : '';
 
+            let dotsHtml = '';
+            if (income > 0) {
+                dotsHtml += `<div class="day-indicator" style="background:#00ff88; box-shadow:0 0 6px #00ff88; width: 6px; height: 6px; border-radius: 50%;"></div>`;
+            }
+            if (expense > 0) {
+                dotsHtml += `<div class="day-indicator" style="background:#ff4d6d; box-shadow:0 0 6px #ff4d6d; width: 6px; height: 6px; border-radius: 50%;"></div>`;
+            }
+
             html += `
-                <div class="calendar-day ${isToday ? 'today' : ''}" onclick="app.showDayDetail('${dateStr}')">
+                <div class="calendar-day ${isToday ? 'today' : ''}" onclick="app.showDayDetail('${dateStr}')" onmouseenter="app.showCalendarTooltip(event, '${dateStr}')" onmouseleave="app.hideCalendarTooltip()" onmousemove="app.moveCalendarTooltip(event)">
                     <span class="day-number">${day}</span>
                     ${net !== 0 ? `<span class="day-amount ${amountClass}">${net > 0 ? '+' : '-'}${amountText}</span>` : ''}
-                    <div style="display:flex; gap:2px; flex-wrap:wrap;">
-                        ${dayTransactions.slice(0, 3).map(t => `<div class="day-indicator" style="background: ${this.categories[t.category]?.color || '#94a3b8'}"></div>`).join('')}
+                    <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top: 4px;">
+                        ${dotsHtml}
                     </div>
                 </div>
             `;
@@ -4523,6 +4634,8 @@ class SpendWise {
         const userName = document.querySelector('.user-name');
         const avatar = document.querySelector('.avatar');
         const settingsName = document.getElementById('settings-username');
+        const settingsAccount = document.getElementById('settings-user-account');
+        const settingsWhatsapp = document.getElementById('settings-user-whatsapp');
         const profileName = document.getElementById('profile-name');
 
         const hour = new Date().getHours();
@@ -4532,7 +4645,33 @@ class SpendWise {
         if (userName) userName.textContent = username;
         if (avatar) avatar.textContent = username.split(' ').filter(n => n).map(n => n[0]).join('').toUpperCase() || 'U';
         if (settingsName) settingsName.value = username;
+        if (settingsAccount) settingsAccount.value = this.settings.userAccount || '';
+        if (settingsWhatsapp) settingsWhatsapp.value = this.settings.userWhatsapp || '';
         if (profileName) profileName.textContent = username;
+
+        // Apply Sovereign Shield State
+        const shieldActive = !!this.settings.shieldActive;
+        document.body.classList.toggle('shield-active', shieldActive);
+        const shieldBtn = document.getElementById('sovereign-shield-toggle');
+        const shieldIcon = document.getElementById('sovereign-shield-icon');
+        const shieldText = document.getElementById('sovereign-shield-text');
+        
+        if (shieldBtn) {
+            if (shieldActive) {
+                shieldBtn.style.borderColor = 'rgba(0, 229, 255, 0.4)';
+                shieldBtn.style.background = 'rgba(0, 229, 255, 0.15)';
+                shieldBtn.style.color = '#00e5ff';
+                if (shieldText) shieldText.textContent = 'Shield Active';
+                if (shieldIcon) shieldIcon.setAttribute('data-lucide', 'shield');
+            } else {
+                shieldBtn.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                shieldBtn.style.background = 'rgba(255, 255, 255, 0.03)';
+                shieldBtn.style.color = 'var(--text-muted)';
+                if (shieldText) shieldText.textContent = 'Shield Disabled';
+                if (shieldIcon) shieldIcon.setAttribute('data-lucide', 'shield-off');
+            }
+            if (window.lucide) lucide.createIcons();
+        }
 
         // Apply Theme
         const isLight = this.settings.theme === 'light';
@@ -4896,6 +5035,8 @@ class SpendWise {
         const newName = document.getElementById('settings-username').value;
         if (!newName) return;
         this.settings.username = newName;
+        this.settings.userAccount = document.getElementById('settings-user-account') ? document.getElementById('settings-user-account').value : '';
+        this.settings.userWhatsapp = document.getElementById('settings-user-whatsapp') ? document.getElementById('settings-user-whatsapp').value : '';
         this.setLocal('settings', JSON.stringify(this.settings));
         this.applySettings();
         this.showToast('Profile updated successfully!', 'success');
@@ -5827,16 +5968,23 @@ class SpendWise {
             const yieldSign = yieldVal >= 0 ? '+' : '';
 
             const row = document.createElement('tr');
+            row.setAttribute('data-asset-id', asset.id);
             row.style.borderBottom = '1px solid var(--glass-border)';
+            row.style.transition = 'background-color 0.5s ease';
             row.innerHTML = `
-                <td style="padding: 12px 8px; font-weight: 600; color: var(--text-main);">${asset.name}</td>
+                <td style="padding: 12px 8px; font-weight: 600; color: var(--text-main);">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span>${asset.name}</span>
+                        <canvas class="sparkline-canvas" data-asset-id="${asset.id}" width="60" height="20" style="margin-left:8px; opacity:0.85; filter:drop-shadow(0 0 2px var(--primary));"></canvas>
+                    </div>
+                </td>
                 <td style="padding: 12px 8px;"><span class="asset-badge ${asset.type.toLowerCase().replace(' ', '')}">${asset.type}</span></td>
                 <td style="padding: 12px 8px; color: var(--text-muted);">${asset.qty}</td>
-                <td style="padding: 12px 8px; color: var(--text-muted);">${this.formatCurrency(asset.buyPrice)}</td>
-                <td style="padding: 12px 8px; color: var(--text-muted);">${this.formatCurrency(asset.currentPrice)}</td>
-                <td style="padding: 12px 8px; color: var(--text-muted);">${this.formatCurrency(costVal)}</td>
-                <td style="padding: 12px 8px; font-weight: 600; color: var(--text-main);">${this.formatCurrency(currentVal)}</td>
-                <td style="padding: 12px 8px; text-align: right; font-weight: 600;" class="${yieldClass}">${yieldSign}${this.formatCurrency(yieldVal)} (${yieldSign}${yieldPct.toFixed(2)}%)</td>
+                <td style="padding: 12px 8px; color: var(--text-muted);" class="sovereign-shield">${this.formatCurrency(asset.buyPrice)}</td>
+                <td style="padding: 12px 8px; color: var(--text-muted);" class="sovereign-shield">${this.formatCurrency(asset.currentPrice)}</td>
+                <td style="padding: 12px 8px; color: var(--text-muted);" class="sovereign-shield">${this.formatCurrency(costVal)}</td>
+                <td style="padding: 12px 8px; font-weight: 600; color: var(--text-main);" class="sovereign-shield">${this.formatCurrency(currentVal)}</td>
+                <td style="padding: 12px 8px; text-align: right; font-weight: 600;" class="${yieldClass} sovereign-shield">${yieldSign}${this.formatCurrency(yieldVal)} (${yieldSign}${yieldPct.toFixed(2)}%)</td>
                 <td style="padding: 12px 8px; text-align: right;">
                     <div style="display: flex; gap: 8px; justify-content: flex-end;">
                         <button class="btn-secondary" onclick="window.app.editAsset('${asset.id}')" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px;"><i data-lucide="edit-2" style="width: 12px; height: 12px;"></i></button>
@@ -5845,6 +5993,15 @@ class SpendWise {
                 </td>
             `;
             tbody.appendChild(row);
+        });
+
+        // Draw sparklines
+        (this.assets || []).forEach(asset => {
+            const canvas = tbody.querySelector(`canvas[data-asset-id="${asset.id}"]`);
+            if (canvas) {
+                const history = asset.priceHistory || [parseFloat(asset.currentPrice)];
+                this.drawSparkline(canvas, history, parseFloat(asset.currentPrice) >= parseFloat(asset.buyPrice) ? '#00ff88' : '#ff4d6d');
+            }
         });
 
         if ((this.assets || []).length === 0) {
@@ -5859,10 +6016,7 @@ class SpendWise {
         }
 
         // Net worth calculation
-        const monthlyData = this.getFilteredTransactions(true);
-        const totalIncome = monthlyData.filter(t => t.type === 'Income').reduce((s, t) => s + t.amount, 0);
-        const totalSpent = monthlyData.filter(t => t.type === 'Expense').reduce((s, t) => s + t.amount, 0);
-        const cashInHand = (totalIncome - totalSpent);
+        const cashInHand = this.cashInHand !== undefined ? this.cashInHand : 0;
         const grossNetWorth = cashInHand + currentTotal;
 
         const totalYield = currentTotal - investedTotal;
@@ -5917,14 +6071,14 @@ class SpendWise {
         const adviceBox = document.getElementById('wealth-advice-box');
         const adviceText = document.getElementById('wealth-advice-text');
         if (adviceBox && adviceText) {
-            if (totalVal <= 0) {
+            if (totalValWithCash <= 0) {
                 adviceBox.style.borderLeftColor = '#eab308';
                 adviceText.innerHTML = "Add your holdings using the <strong>\"+ Add Asset\"</strong> button to run the analytical scan.";
             } else {
-                const stocksPct = (typeVals['Stocks'] / totalVal) * 100;
-                const cryptoPct = (typeVals['Crypto'] / totalVal) * 100;
-                const goldPct = (typeVals['Gold'] / totalVal) * 100;
-                const realestatePct = (typeVals['Real Estate'] / totalVal) * 100;
+                const stocksPct = (typeVals['Stocks'] / totalValWithCash) * 100;
+                const cryptoPct = (typeVals['Crypto'] / totalValWithCash) * 100;
+                const goldPct = (typeVals['Gold'] / totalValWithCash) * 100;
+                const realestatePct = (typeVals['Real Estate'] / totalValWithCash) * 100;
 
                 if (cryptoPct > 30) {
                     adviceBox.style.borderLeftColor = '#ff4d6d';
@@ -6213,83 +6367,117 @@ class SpendWise {
         if (xpFill) xpFill.style.width = `${xpPct}%`;
 
 
-        challengesContainer.innerHTML = `
-            <div class="quest-challenge-card ${qEnvelopeMaster ? 'completed' : ''}">
-                <div>
-                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Envelope Master</h4>
-                    <p style="font-size: 0.75rem; color: var(--text-muted);">Spend 0% over budget on any category envelope limit this month.</p>
-                </div>
-                <span style="font-size: 0.75rem; font-weight: 700; color: ${qEnvelopeMaster ? '#00ff88' : '#eab308'};">
-                    ${qEnvelopeMaster ? 'UNLOCKED' : (hasEnvelopeLimits ? 'ACTIVE' : 'SETUP LIMITS')}
-                </span>
+        const questsData = [
+            { key: 'envelopeMaster', name: 'Envelope Master', desc: 'Spend 0% over budget on any category envelope limit this month.', icon: 'shield-check', val: qEnvelopeMaster, cond: hasEnvelopeLimits ? 'ACTIVE' : 'SETUP LIMITS' },
+            { key: 'saverKnight', name: 'Saver Knight', desc: 'Save 30% or more of your active income flows this month.', icon: 'trophy', val: qSaverKnight, cond: `${(savingsRatio * 100).toFixed(0)}% / 30%` },
+            { key: 'billDestroyer', name: 'Bill Destroyer', desc: 'Settle all pre-configured subscription planner bills before their due day.', icon: 'zap', val: qBillDestroyer, cond: (this.subscriptions || []).length > 0 ? 'PENDING' : 'NO SUBS' },
+            { key: 'frugalSensei', name: 'Frugal Sensei', desc: 'Perform at least 5 price affordability evaluations inside the Insights Vault.', icon: 'sparkles', val: qFrugalSensei, cond: `${this.quests.frugalCount || 0} / 5 Checked` },
+            { key: 'wealthCreator', name: 'Wealth Creator', desc: 'Track 3+ active holdings worth at least $1,000 in your Wealth Hub ledger.', icon: 'gem', val: qWealthCreator, cond: `${(this.assets || []).length} / 3 Assets` },
+            { key: 'debtDefeater', name: 'Debt Defeater', desc: 'Completely settle an outstanding loan balance with payback/repay actions.', icon: 'trending-up', val: qDebtDefeater, cond: qDebtDefeater ? 'UNLOCKED' : 'ACTIVE' },
+            { key: 'cashCommander', name: 'Cash Commander', desc: 'Proactively log a Cash Balance Adjustment to reconcile cash-in-hand flows.', icon: 'banknote', val: qCashCommander, cond: qCashCommander ? 'UNLOCKED' : 'ACTIVE' },
+            { key: 'consistentLogger', name: 'Consistent Logger', desc: 'Log 10 or more overall financial transactions in your SpendWise history feed.', icon: 'check', val: qConsistentLogger, cond: `${this.transactions.length} / 10 Logged` }
+        ];
+
+        let pathHtml = '';
+        const coords = [
+            { x: 50, y: 70 },
+            { x: 130, y: 30 },
+            { x: 210, y: 110 },
+            { x: 290, y: 30 },
+            { x: 370, y: 110 },
+            { x: 450, y: 30 },
+            { x: 530, y: 110 },
+            { x: 610, y: 70 }
+        ];
+
+        for (let i = 0; i < coords.length - 1; i++) {
+            const current = questsData[i].val;
+            const next = questsData[i+1].val;
+            let strokeColor = 'rgba(255, 255, 255, 0.08)';
+            let strokeWidth = '3';
+            let glowFilter = '';
+            
+            if (current && next) {
+                strokeColor = '#00ff88';
+                strokeWidth = '4';
+                glowFilter = 'filter="url(#glow-green)"';
+            } else if (current || next) {
+                strokeColor = 'var(--primary)';
+                strokeWidth = '3.5';
+                glowFilter = 'filter="url(#glow-cyan)"';
+            }
+            pathHtml += `<line x1="${coords[i].x}" y1="${coords[i].y}" x2="${coords[i+1].x}" y2="${coords[i+1].y}" stroke="${strokeColor}" stroke-width="${strokeWidth}" ${glowFilter} stroke-linecap="round" />`;
+        }
+
+        let nodesHtml = '';
+        questsData.forEach((q, idx) => {
+            const pt = coords[idx];
+            const isCompleted = q.val;
+            const isActive = !isCompleted && (idx === 0 || questsData[idx-1].val);
+            
+            let fill = '#181829';
+            let stroke = 'rgba(255,255,255,0.2)';
+            let shadow = '';
+            let strokeWidth = '2';
+            let radius = '16';
+            
+            if (isCompleted) {
+                fill = '#00ff88';
+                stroke = '#00ff88';
+                shadow = 'filter="url(#glow-green)"';
+            } else if (isActive) {
+                fill = 'var(--primary)';
+                stroke = '#00e5ff';
+                shadow = 'filter="url(#glow-cyan)" class="node-pulsing"';
+                radius = '18';
+            } else {
+                fill = 'rgba(255,255,255,0.02)';
+                stroke = 'rgba(255,255,255,0.1)';
+            }
+            
+            nodesHtml += `
+                <g style="cursor: pointer;" onclick="window.app.showQuestDetails(${idx})" class="quest-node">
+                    <circle cx="${pt.x}" cy="${pt.y}" r="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" ${shadow} />
+                    <text x="${pt.x}" y="${pt.y + 0.5}" fill="${isCompleted || isActive ? '#000000' : '#475569'}" font-size="10px" font-weight="900" text-anchor="middle" dominant-baseline="middle">${idx + 1}</text>
+                </g>
+            `;
+        });
+
+        const svgMap = `
+            <div style="background: rgba(15,23,42,0.4); border-radius: 16px; border: 1px solid var(--glass-border); padding: 15px; margin-bottom: 15px; overflow-x: auto;">
+                <svg viewBox="0 0 660 140" style="width: 100%; min-width: 600px; display: block;">
+                    <defs>
+                        <filter id="glow-green" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="5" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                        <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="5" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                    </defs>
+                    ${pathHtml}
+                    ${nodesHtml}
+                </svg>
             </div>
-            <div class="quest-challenge-card ${qSaverKnight ? 'completed' : ''}">
-                <div>
-                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Saver Knight</h4>
-                    <p style="font-size: 0.75rem; color: var(--text-muted);">Save 30% or more of your active income flows this month.</p>
-                    <div style="width: 100px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; margin-top: 6px; overflow: hidden;">
-                        <div style="width: ${Math.min(100, savingsRatio * 100)}%; height: 100%; background: #00b3ff; border-radius: 2px;"></div>
-                    </div>
+            <div id="quest-details-card" class="glass" style="padding: 1rem; border-radius: 12px; border: 1px solid rgba(0, 229, 255, 0.15); background: rgba(0, 229, 255, 0.02); display: flex; align-items: center; gap: 15px; min-height: 80px;">
+                <div class="badge-icon-wrapper" style="width:40px; height:40px; border-radius:50%; background:rgba(0,229,255,0.1); color:#00e5ff; display:flex; align-items:center; justify-content:center;" id="quest-details-icon">
+                    <i data-lucide="sparkles"></i>
                 </div>
-                <span style="font-size: 0.75rem; font-weight: 700; color: ${qSaverKnight ? '#00ff88' : '#eab308'};">
-                    ${(savingsRatio * 100).toFixed(0)}% / 30%
-                </span>
-            </div>
-            <div class="quest-challenge-card ${qBillDestroyer ? 'completed' : ''}">
-                <div>
-                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Bill Destroyer</h4>
-                    <p style="font-size: 0.75rem; color: var(--text-muted);">Settle all pre-configured subscription planner bills before their due day.</p>
+                <div style="flex:1;">
+                    <h4 id="quest-details-title" style="margin:0; font-size:0.95rem; font-weight:700; color:var(--text-main);">Quest Details</h4>
+                    <p id="quest-details-desc" class="text-muted" style="margin:3px 0 0 0; font-size:0.8rem;">Click on a map node above to explore active milestones and check your status.</p>
                 </div>
-                <span style="font-size: 0.75rem; font-weight: 700; color: ${qBillDestroyer ? '#00ff88' : '#eab308'};">
-                    ${qBillDestroyer ? 'UNLOCKED' : ((this.subscriptions || []).length > 0 ? 'UNPAID PENDING' : 'NO SUBS')}
-                </span>
-            </div>
-            <div class="quest-challenge-card ${qFrugalSensei ? 'completed' : ''}">
-                <div>
-                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Frugal Sensei</h4>
-                    <p style="font-size: 0.75rem; color: var(--text-muted);">Perform at least 5 price affordability evaluations inside the Insights Vault.</p>
-                </div>
-                <span style="font-size: 0.75rem; font-weight: 700; color: ${qFrugalSensei ? '#00ff88' : '#eab308'};">
-                    ${this.quests.frugalCount || 0} / 5 Checked
-                </span>
-            </div>
-            <div class="quest-challenge-card ${qWealthCreator ? 'completed' : ''}">
-                <div>
-                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Wealth Creator</h4>
-                    <p style="font-size: 0.75rem; color: var(--text-muted);">Track 3+ active holdings worth at least $1,000 in your Wealth Hub ledger.</p>
-                </div>
-                <span style="font-size: 0.75rem; font-weight: 700; color: ${qWealthCreator ? '#00ff88' : '#eab308'};">
-                    ${qWealthCreator ? 'UNLOCKED' : `${(this.assets || []).length} / 3 Holdings`}
-                </span>
-            </div>
-            <div class="quest-challenge-card ${qDebtDefeater ? 'completed' : ''}">
-                <div>
-                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Debt Defeater</h4>
-                    <p style="font-size: 0.75rem; color: var(--text-muted);">Completely settle an outstanding loan balance with payback/repay actions.</p>
-                </div>
-                <span style="font-size: 0.75rem; font-weight: 700; color: ${qDebtDefeater ? '#00ff88' : '#eab308'};">
-                    ${qDebtDefeater ? 'UNLOCKED' : 'ACTIVE'}
-                </span>
-            </div>
-            <div class="quest-challenge-card ${qCashCommander ? 'completed' : ''}">
-                <div>
-                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Cash Commander</h4>
-                    <p style="font-size: 0.75rem; color: var(--text-muted);">Proactively log a Cash Balance Adjustment to reconcile cash-in-hand flows.</p>
-                </div>
-                <span style="font-size: 0.75rem; font-weight: 700; color: ${qCashCommander ? '#00ff88' : '#eab308'};">
-                    ${qCashCommander ? 'UNLOCKED' : 'ACTIVE'}
-                </span>
-            </div>
-            <div class="quest-challenge-card ${qConsistentLogger ? 'completed' : ''}">
-                <div>
-                    <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">Consistent Logger</h4>
-                    <p style="font-size: 0.75rem; color: var(--text-muted);">Log 10 or more overall financial transactions in your SpendWise history feed.</p>
-                </div>
-                <span style="font-size: 0.75rem; font-weight: 700; color: ${qConsistentLogger ? '#00ff88' : '#eab308'};">
-                    ${this.transactions.length} / 10 Logged
-                </span>
+                <div id="quest-details-status" style="font-size:0.8rem; font-weight:700; color:#eab308;">Select Node</div>
             </div>
         `;
+
+        challengesContainer.innerHTML = svgMap;
+        this._questsData = questsData;
+
+        let activeIdx = questsData.findIndex(q => !q.val);
+        if (activeIdx === -1) activeIdx = 0;
+        this.showQuestDetails(activeIdx);
 
         // Render badges slots
         badgesContainer.innerHTML = `
@@ -8064,6 +8252,38 @@ ${yyyy}-${mm}-15,Planet Fitness Gym,300,Expense`;
                 `;
             }
 
+            // Fluctuate each asset's current price
+            if (this.assets && this.assets.length > 0) {
+                this.assets.forEach(asset => {
+                    if (!asset.priceHistory) {
+                        asset.priceHistory = [parseFloat(asset.currentPrice)];
+                    }
+                    const prevPrice = parseFloat(asset.currentPrice);
+                    const newPrice = fluctuate(prevPrice, 0.005); // Fluctuate up to 0.5%
+                    asset.currentPrice = newPrice;
+                    asset.priceHistory.push(newPrice);
+                    if (asset.priceHistory.length > 10) {
+                        asset.priceHistory.shift();
+                    }
+                    
+                    // Flash pulse on asset row
+                    setTimeout(() => {
+                        const tr = document.querySelector(`tr[data-asset-id="${asset.id}"]`);
+                        if (tr) {
+                            const change = newPrice - prevPrice;
+                            if (change > 0) {
+                                tr.classList.add('pulse-gain');
+                                setTimeout(() => tr.classList.remove('pulse-gain'), 800);
+                            } else if (change < 0) {
+                                tr.classList.add('pulse-loss');
+                                setTimeout(() => tr.classList.remove('pulse-loss'), 800);
+                            }
+                        }
+                    }, 50);
+                });
+                this.renderWealthHub();
+            }
+
             // Slightly drift base rates
             baseRates.USDPKR = usdPkr;
             baseRates.EURPKR = eurPkr;
@@ -8170,7 +8390,7 @@ ${yyyy}-${mm}-15,Planet Fitness Gym,300,Expense`;
         const outstandingDebtToOthers = Math.max(0, cumBorrowed - cumPaidback);
         const currentPortfolioTotal = (this.assets || []).reduce((sum, a) => sum + (parseFloat(a.qty) * parseFloat(a.currentPrice) || 0), 0);
 
-        const totalAssets = Math.max(0, availableCash) + totalGoalsSavings + outstandingLendToOthers + currentPortfolioTotal;
+        const totalAssets = availableCash + totalGoalsSavings + outstandingLendToOthers + currentPortfolioTotal;
         const totalLiabilities = outstandingDebtToOthers;
         const netWorth = totalAssets - totalLiabilities;
 
@@ -8328,12 +8548,12 @@ catFilter, categoryIncome, categorySpent
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td>Liquid Cash in Hand (Liquidity)</td><td style="text-align: right;" class="report-val-pos">${fmt(f.availableCash)}</td></tr>
+                            <tr><td>Liquid Cash in Hand (Liquidity)</td><td style="text-align: right;" class="${f.availableCash >= 0 ? 'report-val-pos' : 'report-val-neg'}">${fmt(f.availableCash)}</td></tr>
                             <tr><td>Gullak Savings Vault (Locked Envelopes)</td><td style="text-align: right;">${fmt(f.totalGoalsSavings)}</td></tr>
                             <tr><td>Accounts Receivable (Outstanding Lends)</td><td style="text-align: right;">${fmt(f.outstandingLendToOthers)}</td></tr>
                             ${lendsSubRow}
                             <tr><td>Wealth Hub Investment Portfolios</td><td style="text-align: right;">${fmt(f.currentPortfolioTotal)}</td></tr>
-                            <tr class="report-total-row"><td>TOTAL ASSETS</td><td style="text-align: right;" class="report-val-pos">${fmt(f.totalAssets)}</td></tr>
+                            <tr class="report-total-row"><td>TOTAL ASSETS</td><td style="text-align: right;" class="${f.totalAssets >= 0 ? 'report-val-pos' : 'report-val-neg'}">${fmt(f.totalAssets)}</td></tr>
                         </tbody>
                     </table>
 
@@ -9395,6 +9615,34 @@ catFilter, categoryIncome, categorySpent
             
             const shareCloseBtn = document.getElementById('close-share-modal');
             if (shareCloseBtn) shareCloseBtn.click();
+
+            // --- TEST CASE 6: Validate Privacy Shield Toggle ---
+            addLog("Running TEST 6: Validate Privacy Shield Toggle...", "info");
+            
+            const shieldBtn = document.getElementById('sovereign-shield-toggle');
+            if (shieldBtn) {
+                // Ensure initial state is clean
+                this.settings.shieldActive = false;
+                this.applySettings();
+                
+                const bodyBefore = document.body.classList.contains('shield-active');
+                
+                // Click to toggle on
+                shieldBtn.click();
+                const bodyAfter = document.body.classList.contains('shield-active');
+                
+                // Click to toggle off
+                shieldBtn.click();
+                const bodyFinal = document.body.classList.contains('shield-active');
+                
+                if (!bodyBefore && bodyAfter && !bodyFinal) {
+                    addLog("Privacy Shield toggled on and off, updating body class successfully.", "pass");
+                } else {
+                    throw new Error("Sovereign shield did not apply or toggle body classes properly.");
+                }
+            } else {
+                throw new Error("Sovereign shield toggle button element not found in DOM.");
+            }
             
             // --- CLEAN UP ---
             // Restore original state
@@ -9430,6 +9678,338 @@ catFilter, categoryIncome, categorySpent
                     <button onclick="this.parentElement.parentElement.remove()" style="background: #ff4d6d; border: none; border-radius: 6px; padding: 4px 10px; color: #fff; font-size: 0.75rem; font-weight: 700; cursor: pointer;">Close</button>
                 </div>
             `;
+        }
+    }
+
+    // --- Premium UI/UX Missing Helper Methods ---
+
+    toggleSovereignShield() {
+        this.playAudio('click');
+        this.settings.shieldActive = !this.settings.shieldActive;
+        this.setLocal('settings', JSON.stringify(this.settings));
+        this.applySettings();
+        this.showToast(this.settings.shieldActive ? 'Sovereign Shield Activated (Financials Blurred)' : 'Sovereign Shield Deactivated', 'info');
+    }
+
+    triggerConfetti() {
+        const canvas = document.getElementById('quest-confetti-canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const colors = ['#00e5ff', '#00ff88', '#bb86fc', '#ff0055', '#ffb703'];
+        const particles = [];
+        for (let i = 0; i < 150; i++) {
+            particles.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height - canvas.height,
+                r: Math.random() * 6 + 4,
+                d: Math.random() * canvas.height,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                tilt: Math.random() * 10 - 5,
+                tiltAngleIncremental: Math.random() * 0.07 + 0.02,
+                tiltAngle: 0
+            });
+        }
+
+        let animationFrameId;
+        const draw = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let active = false;
+            particles.forEach((p) => {
+                p.tiltAngle += p.tiltAngleIncremental;
+                p.y += (Math.cos(p.d) + 3 + p.r / 2) / 2;
+                p.x += Math.sin(p.tiltAngle);
+                p.tilt = Math.sin(p.tiltAngle - p.r / 2) * 15;
+
+                if (p.y < canvas.height) active = true;
+
+                ctx.beginPath();
+                ctx.lineWidth = p.r;
+                ctx.strokeStyle = p.color;
+                ctx.moveTo(p.x + p.tilt + p.r / 2, p.y);
+                ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
+                ctx.stroke();
+            });
+
+            if (active) {
+                animationFrameId = requestAnimationFrame(draw);
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        };
+        draw();
+    }
+
+    showCalendarTooltip(e, dateStr) {
+        const tooltip = document.getElementById('calendar-tooltip');
+        const dateEl = document.getElementById('tooltip-date');
+        const statsEl = document.getElementById('tooltip-stats');
+        const canvas = document.getElementById('tooltip-canvas');
+        if (!tooltip || !dateEl || !statsEl) return;
+
+        // Set date title
+        const dateObj = new Date(dateStr);
+        dateEl.textContent = dateObj.toLocaleDateString('en-PK', { weekday: 'short', month: 'short', day: 'numeric' });
+
+        // Filter transactions for this day
+        const dayTxs = this.transactions.filter(t => t.date === dateStr);
+        let inflow = 0;
+        let outflow = 0;
+        dayTxs.forEach(t => {
+            const amt = parseFloat(t.amount || 0);
+            if (t.type === 'Income') inflow += amt;
+            else if (t.type === 'Expense') outflow += amt;
+        });
+
+        // Set text stats
+        statsEl.innerHTML = `
+            <div style="display:flex; justify-content:space-between; width:100%;"><span>Inflow:</span><span style="color:#00ff88; font-weight:700;">${this.formatCurrency(inflow)}</span></div>
+            <div style="display:flex; justify-content:space-between; width:100%;"><span>Outflow:</span><span style="color:#ff4d6d; font-weight:700;">${this.formatCurrency(outflow)}</span></div>
+        `;
+
+        // Draw trend line on mini canvas
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid lines
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            for (let y = 10; y < canvas.height; y += 20) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+
+            // Draw line trend
+            const points = [0];
+            let balance = 0;
+            dayTxs.slice().reverse().forEach(t => {
+                const amt = parseFloat(t.amount || 0);
+                if (t.type === 'Income') balance += amt;
+                else balance -= amt;
+                points.push(balance);
+            });
+
+            if (points.length > 1) {
+                const max = Math.max(...points.map(Math.abs));
+                const scaleY = max > 0 ? (canvas.height - 20) / (2 * max) : 1;
+                const scaleX = canvas.width / (points.length - 1);
+                const midY = canvas.height / 2;
+
+                ctx.strokeStyle = 'rgba(0, 229, 255, 0.7)';
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.moveTo(0, midY - points[0] * scaleY);
+                for (let i = 1; i < points.length; i++) {
+                    ctx.lineTo(i * scaleX, midY - points[i] * scaleY);
+                }
+                ctx.stroke();
+
+                // Add a glow
+                ctx.shadowColor = 'rgba(0, 229, 255, 0.5)';
+                ctx.shadowBlur = 4;
+                ctx.stroke();
+                ctx.shadowBlur = 0; // reset
+            } else {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(0, canvas.height / 2);
+                ctx.lineTo(canvas.width, canvas.height / 2);
+                ctx.stroke();
+            }
+        }
+
+        // Show tooltip
+        tooltip.style.display = 'block';
+        tooltip.style.opacity = '1';
+        this.moveCalendarTooltip(e);
+    }
+
+    hideCalendarTooltip() {
+        const tooltip = document.getElementById('calendar-tooltip');
+        if (tooltip) {
+            tooltip.style.opacity = '0';
+            tooltip.style.display = 'none';
+        }
+    }
+
+    moveCalendarTooltip(e) {
+        const tooltip = document.getElementById('calendar-tooltip');
+        if (!tooltip) return;
+        const x = e.clientX + 15;
+        const y = e.clientY + 15;
+        tooltip.style.left = x + 'px';
+        tooltip.style.top = y + 'px';
+    }
+
+    toggleVoiceTransaction() {
+        this.playAudio('click');
+        const visualizer = document.getElementById('voice-visualizer');
+        const micIcon = document.getElementById('mic-icon-state');
+        const micBtn = document.getElementById('voice-mic-btn');
+        
+        if (this.isListeningVoice) {
+            this.isListeningVoice = false;
+            if (this.recognition) {
+                try { this.recognition.stop(); } catch(e) {}
+            }
+            if (visualizer) visualizer.style.display = 'none';
+            if (micIcon) {
+                micIcon.setAttribute('data-lucide', 'mic');
+                if (window.lucide) lucide.createIcons();
+            }
+            if (micBtn) {
+                micBtn.style.animation = 'none';
+                micBtn.style.background = 'linear-gradient(135deg, #00e5ff, #00b3ff)';
+            }
+            this.showToast('Voice dictation stopped.', 'info');
+        } else {
+            this.isListeningVoice = true;
+            if (visualizer) visualizer.style.display = 'block';
+            if (micIcon) {
+                micIcon.setAttribute('data-lucide', 'square');
+                if (window.lucide) lucide.createIcons();
+            }
+            if (micBtn) {
+                micBtn.style.animation = 'pulse-aura 1.5s infinite';
+                micBtn.style.background = 'linear-gradient(135deg, #ff0055, #ff4d6d)';
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                this.recognition = new SpeechRecognition();
+                this.recognition.continuous = false;
+                this.recognition.lang = 'en-US';
+                this.recognition.interimResults = false;
+                
+                this.recognition.onresult = (event) => {
+                    const resultText = event.results[0][0].transcript;
+                    this.parseVoiceCommand(resultText);
+                    this.toggleVoiceTransaction();
+                };
+                
+                this.recognition.onerror = (err) => {
+                    console.error('Speech recognition error:', err);
+                    this.showToast('Speech recognition error: ' + err.error, 'error');
+                    this.toggleVoiceTransaction();
+                };
+                
+                this.recognition.onend = () => {
+                    if (this.isListeningVoice) this.toggleVoiceTransaction();
+                };
+
+                try {
+                    this.recognition.start();
+                    this.showToast('Listening... speak clearly (e.g. "spent 500 on Food")', 'info');
+                } catch(e) {
+                    console.error(e);
+                    this.showToast('Could not start microphone.', 'error');
+                    this.toggleVoiceTransaction();
+                }
+            } else {
+                this.showToast('Speech API not supported. Mocking recording...', 'warning');
+                setTimeout(() => {
+                    if (this.isListeningVoice) {
+                        this.parseVoiceCommand("spent 350 on Food");
+                        this.toggleVoiceTransaction();
+                    }
+                }, 4000);
+            }
+
+            this.startVoiceVisualizer();
+        }
+    }
+
+    startVoiceVisualizer() {
+        const canvas = document.getElementById('voice-visualizer');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        const drawWave = () => {
+            if (!this.isListeningVoice) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.strokeStyle = '#00e5ff';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            
+            const sliceWidth = canvas.width / 15;
+            let x = 0;
+            
+            ctx.moveTo(0, canvas.height / 2);
+            for (let i = 0; i < 15; i++) {
+                const height = Math.random() * (canvas.height - 4) + 2;
+                const offset = (canvas.height - height) / 2;
+                ctx.lineTo(x, offset);
+                ctx.lineTo(x + sliceWidth / 2, canvas.height - offset);
+                x += sliceWidth;
+            }
+            ctx.lineTo(canvas.width, canvas.height / 2);
+            ctx.stroke();
+
+            setTimeout(() => {
+                requestAnimationFrame(drawWave);
+            }, 80);
+        };
+        drawWave();
+    }
+
+    parseVoiceCommand(text) {
+        console.log(`Parsing voice command: "${text}"`);
+        const cleaned = text.toLowerCase().trim();
+        
+        let amount = null;
+        let category = 'Other';
+        let notes = `Voice Log: ${text}`;
+        let type = 'Expense';
+
+        const expenseRegex = /(?:spent|spend|expense|pay|paid)\s+(\d+)(?:\s+on|\s+for)?\s+([a-z0-9\s]+)/i;
+        const incomeRegex = /(?:earned|earn|income|received|add income)\s+(\d+)(?:\s+from|\s+for)?\s+([a-z0-9\s]+)/i;
+        const simpleRegex = /(\d+)\s+(?:on|for)\s+([a-z0-9\s]+)/i;
+
+        let match = cleaned.match(expenseRegex);
+        if (match) {
+            amount = match[1];
+            category = match[2];
+            type = 'Expense';
+        } else {
+            match = cleaned.match(incomeRegex);
+            if (match) {
+                amount = match[1];
+                category = match[2];
+                type = 'Income';
+            } else {
+                match = cleaned.match(simpleRegex);
+                if (match) {
+                    amount = match[1];
+                    category = match[2];
+                    type = 'Expense';
+                }
+            }
+        }
+
+        if (amount) {
+            const matchedCat = Object.keys(this.categories).find(c => c.toLowerCase() === category.trim().toLowerCase());
+            const finalCategory = matchedCat || 'Other';
+
+            const amountEl = document.getElementById('amount');
+            const categoryEl = document.getElementById('category');
+            const notesEl = document.getElementById('note');
+            const typeEl = document.getElementById('type');
+
+            if (amountEl) amountEl.value = amount;
+            if (categoryEl) categoryEl.value = finalCategory;
+            if (notesEl) notesEl.value = notes;
+            if (typeEl) typeEl.value = type;
+
+            this.showToast(`Voice input recognized: ${type} of ${amount} on ${finalCategory}`, 'success');
+        } else {
+            this.showToast(`Voice input heard: "${text}", but couldn't parse amount/category automatically.`, 'info');
         }
     }
 
