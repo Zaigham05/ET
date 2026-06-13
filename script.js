@@ -2777,6 +2777,15 @@ class SpendWise {
                 const t = this.transactions.find(item => item.id === id);
                 if (t) {
                     this.logAction('DELETE', `Transaction #${t.id}`, `Removed ${t.type} of ${this.formatCurrency(t.amount)}.`);
+                    // Sync Split Wallet if a Repay transaction is deleted
+                    if (t.splitId && t.type === 'Repay') {
+                        const split = (this.sharedWallets || []).find(s => s.id === t.splitId);
+                        if (split && split.settledMembers) {
+                            split.settledMembers = split.settledMembers.filter(m => m !== t.person);
+                            split.status = 'Pending';
+                        }
+                    }
+
                     this.transactions = this.transactions.filter(tr => tr.id !== id);
                     
                     // RE-INDEX to keep sequence perfect
@@ -9734,7 +9743,7 @@ catFilter, categoryIncome, categorySpent
                 const lendExists = this.transactions.some(t =>
                     t.type === 'Lend' &&
                     t.person === member &&
-                    (t.splitId === split.id || (t.note && t.note.includes(`[Split: ${split.title}]`) && t.note.includes(`Share lent to ${member}`)))
+                    (t.splitId === split.id || (!t.splitId && t.note && t.note.includes(`[Split: ${split.title}]`) && t.note.includes(`Share lent to ${member}`)))
                 );
 
                 if (!lendExists) {
