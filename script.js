@@ -2193,7 +2193,7 @@ class SpendWise {
         this.categoryChart.data.datasets[0].backgroundColor = Object.keys(catMap).map(c => this.categories[c]?.color || '#94a3b8');
         this.categoryChart.update();
 
-        // 2. Trends Chart (Daily vs Weekly)
+        // 2. Trends Chart (Daily vs Weekly vs Month-Wise)
         const periodType = this.trendPeriodEl ? this.trendPeriodEl.value : 'month';
         const selectedPeriod = this.monthSelector.value;
         const [monthName, year] = selectedPeriod.split(' ');
@@ -2213,7 +2213,7 @@ class SpendWise {
                 incomeData.push(dayTransactions.filter(t => t.type === 'Income').reduce((s, t) => s + t.amount, 0));
                 expenseData.push(dayTransactions.filter(t => t.type === 'Expense').reduce((s, t) => s + t.amount, 0));
             }
-        } else {
+        } else if (periodType === 'week') {
             // Weekly Grouping
             labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
             incomeData = [0, 0, 0, 0, 0];
@@ -2229,6 +2229,47 @@ class SpendWise {
             // Trim Week 5 if no data
             if (incomeData[4] === 0 && expenseData[4] === 0) {
                 labels.pop(); incomeData.pop(); expenseData.pop();
+            }
+        } else if (periodType === 'year') {
+            // Month-Wise grouping for all unique months in the transaction history
+            const monthMap = {};
+            const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            
+            this.transactions.forEach(t => {
+                if (!t.date) return;
+                const d = new Date(t.date);
+                if (isNaN(d.getTime())) return;
+                const y = d.getFullYear();
+                const mIdx = d.getMonth();
+                const key = `${y}-${String(mIdx + 1).padStart(2, '0')}`;
+                if (!monthMap[key]) {
+                    monthMap[key] = {
+                        label: `${monthNamesShort[mIdx]} ${y}`,
+                        income: 0,
+                        expense: 0
+                    };
+                }
+                if (t.type === 'Income') monthMap[key].income += t.amount;
+                if (t.type === 'Expense') monthMap[key].expense += t.amount;
+            });
+            
+            // Sort keys chronologically
+            const sortedKeys = Object.keys(monthMap).sort();
+            
+            if (sortedKeys.length === 0) {
+                const now = new Date();
+                for (let i = 5; i >= 0; i--) {
+                    const temp = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    labels.push(`${monthNamesShort[temp.getMonth()]} ${temp.getFullYear()}`);
+                    incomeData.push(0);
+                    expenseData.push(0);
+                }
+            } else {
+                sortedKeys.forEach(k => {
+                    labels.push(monthMap[k].label);
+                    incomeData.push(monthMap[k].income);
+                    expenseData.push(monthMap[k].expense);
+                });
             }
         }
 
@@ -8340,6 +8381,12 @@ ${yyyy}-${mm}-15,Planet Fitness Gym,300,Expense`;
         });
         const currentPeriod = new Date().toLocaleDateString('en-PK', { month: 'long', year: 'numeric' });
         if (!months.includes(currentPeriod)) months.unshift(currentPeriod);
+        
+        // Add aggregate periods
+        months.push("Year to Date (YTD)");
+        months.push("Fiscal Year (FY)");
+        months.push("Linear Year (Last 12M)");
+        months.push("Month-Wise (All-Time)");
 
         const select = document.getElementById('report-period-selector');
         if (select) {
@@ -8382,6 +8429,110 @@ ${yyyy}-${mm}-15,Planet Fitness Gym,300,Expense`;
     }
 
     getReportFinancials(selectedPeriod) {
+        let isMonthWise = false;
+        let monthWiseSummaries = [];
+        let filterStart = null;
+        let filterEnd = null;
+        let numMonths = 1;
+        let periodTransactions = [];
+
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+
+        const monthWisePeriods = ["Month-Wise (All-Time)", "Year to Date (YTD)", "Fiscal Year (FY)", "Linear Year (Last 12M)"];
+        const originalPeriod = selectedPeriod;
+
+        if (monthWisePeriods.includes(selectedPeriod)) {
+            isMonthWise = true;
+            
+            if (selectedPeriod === "Year to Date (YTD)") {
+                filterStart = new Date(currentYear, 0, 1);
+                filterEnd = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
+                numMonths = currentMonth + 1;
+            } else if (selectedPeriod === "Fiscal Year (FY)") {
+                // FY in Pakistan: July 1 to June 30
+                const fyStartYear = currentMonth >= 6 ? currentYear : currentYear - 1;
+                filterStart = new Date(fyStartYear, 6, 1);
+                filterEnd = new Date(fyStartYear + 1, 6, 0, 23, 59, 59);
+                numMonths = 12;
+            } else if (selectedPeriod === "Linear Year (Last 12M)") {
+                filterStart = new Date(currentYear, currentMonth - 11, 1);
+                filterEnd = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
+                numMonths = 12;
+            } else if (selectedPeriod === "Month-Wise (All-Time)") {
+                // Calculate months between oldest transaction and now
+                const dates = (this.transactions || []).map(t => new Date(t.date)).filter(d => !isNaN(d.getTime()));
+                if (dates.length > 0) {
+                    const minDate = new Date(Math.min(...dates));
+                    const maxDate = new Date();
+                    const yDiff = maxDate.getFullYear() - minDate.getFullYear();
+                    const mDiff = maxDate.getMonth() - minDate.getMonth();
+                    numMonths = Math.max(1, yDiff * 12 + mDiff + 1);
+                } else {
+                    numMonths = 1;
+                }
+            }
+
+            const monthMap = {};
+            const monthNamesLong = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            
+            (this.transactions || []).forEach(t => {
+                if (!t.date) return;
+                const d = new Date(t.date);
+                if (isNaN(d.getTime())) return;
+                
+                if (filterStart && d < filterStart) return;
+                if (filterEnd && d > filterEnd) return;
+
+                const y = d.getFullYear();
+                const mIdx = d.getMonth();
+                const key = `${y}-${String(mIdx + 1).padStart(2, '0')}`;
+                if (!monthMap[key]) {
+                    monthMap[key] = {
+                        label: `${monthNamesLong[mIdx]} ${y}`,
+                        income: 0,
+                        expense: 0
+                    };
+                }
+                if (t.type === 'Income') monthMap[key].income += parseFloat(t.amount || 0);
+                if (t.type === 'Expense') monthMap[key].expense += parseFloat(t.amount || 0);
+            });
+            
+            const sortedKeys = Object.keys(monthMap).sort();
+            sortedKeys.forEach(k => {
+                const inc = monthMap[k].income;
+                const exp = monthMap[k].expense;
+                const sav = inc - exp;
+                const rate = inc > 0 ? (sav / inc) * 100 : 0;
+                monthWiseSummaries.push({
+                    month: monthMap[k].label,
+                    income: inc,
+                    expense: exp,
+                    savings: sav,
+                    savingsRate: rate
+                });
+            });
+
+            // Fallback to summaries length if it's All-Time and we have actual months
+            if (selectedPeriod === "Month-Wise (All-Time)" && monthWiseSummaries.length > 0) {
+                numMonths = Math.max(numMonths, monthWiseSummaries.length);
+            }
+
+            // Populate periodTransactions for multi-month periods
+            periodTransactions = (this.transactions || []).filter(t => {
+                if (!t.date) return false;
+                const d = new Date(t.date);
+                if (isNaN(d.getTime())) return false;
+                if (filterStart && d < filterStart) return false;
+                if (filterEnd && d > filterEnd) return false;
+                return true;
+            });
+            
+            // Fallback for single month metrics
+            selectedPeriod = new Date().toLocaleDateString('en-PK', { month: 'long', year: 'numeric' });
+        }
+
         if (!selectedPeriod || typeof selectedPeriod !== 'string') {
             selectedPeriod = new Date().toLocaleDateString('en-PK', { month: 'long', year: 'numeric' });
         }
@@ -8405,9 +8556,14 @@ ${yyyy}-${mm}-15,Planet Fitness Gym,300,Expense`;
             return tDate.getMonth() === targetMonthIdx && tDate.getFullYear() === targetYear;
         });
 
+        if (!isMonthWise) {
+            periodTransactions = monthlyTransactions;
+            numMonths = 1;
+        }
+
         // Income, Expenses, Lends, Borrowing
-        const totalIncome = monthlyTransactions.filter(t => t.type === 'Income').reduce((s, t) => s + parseFloat(t.amount || 0), 0);
-        const totalSpent = monthlyTransactions.filter(t => t.type === 'Expense').reduce((s, t) => s + parseFloat(t.amount || 0), 0);
+        const totalIncome = periodTransactions.filter(t => t.type === 'Income').reduce((s, t) => s + parseFloat(t.amount || 0), 0);
+        const totalSpent = periodTransactions.filter(t => t.type === 'Expense').reduce((s, t) => s + parseFloat(t.amount || 0), 0);
 
         const cumIncome = cumulativeTransactions.filter(t => t.type === 'Income').reduce((s, t) => s + parseFloat(t.amount || 0), 0);
         const cumSpent = cumulativeTransactions.filter(t => t.type === 'Expense').reduce((s, t) => s + parseFloat(t.amount || 0), 0);
@@ -8469,8 +8625,8 @@ ${yyyy}-${mm}-15,Planet Fitness Gym,300,Expense`;
         let categoryIncome = 0;
         let categorySpent = 0;
         if (catFilter !== 'all') {
-            categoryIncome = monthlyTransactions.filter(t => t.type === 'Income' && t.category === catFilter).reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
-            categorySpent = monthlyTransactions.filter(t => t.type === 'Expense' && t.category === catFilter).reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+            categoryIncome = periodTransactions.filter(t => t.type === 'Income' && t.category === catFilter).reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+            categorySpent = periodTransactions.filter(t => t.type === 'Expense' && t.category === catFilter).reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
         } else {
             categoryIncome = totalIncome;
             categorySpent = totalSpent;
@@ -8482,9 +8638,10 @@ ${yyyy}-${mm}-15,Planet Fitness Gym,300,Expense`;
             outstandingLendToOthers, outstandingDebtToOthers,
             currentPortfolioTotal, totalAssets, totalLiabilities, netWorth,
             savingsRate, emergencyFundMonths, debtToAsset,
-            cumulativeTransactions, monthlyTransactions,
+            cumulativeTransactions, monthlyTransactions, periodTransactions,
             lendsByPerson, debtsByPerson,
-catFilter, categoryIncome, categorySpent
+            catFilter, categoryIncome, categorySpent,
+            isMonthWise, monthWiseSummaries, numMonths, originalPeriod
         };
     }
 
@@ -8497,6 +8654,37 @@ catFilter, categoryIncome, categorySpent
 
         const f = this.getReportFinancials(period);
         const fmt = (v) => this.formatCurrency(v);
+
+        if (f.isMonthWise && this.reportActiveTab === 'balance') {
+            const trs = f.monthWiseSummaries.map(s => `
+                <tr>
+                    <td>${s.month}</td>
+                    <td style="text-align: right;" class="report-val-pos">+${fmt(s.income)}</td>
+                    <td style="text-align: right;" class="report-val-neg">-${fmt(s.expense)}</td>
+                    <td style="text-align: right; color: ${s.savings >= 0 ? '#00ff88' : '#ff4d6d'};">${s.savings >= 0 ? '+' : ''}${fmt(s.savings)}</td>
+                    <td style="text-align: right; font-weight: 700;">${s.savingsRate.toFixed(1)}%</td>
+                </tr>
+            `).join('');
+            
+            previewBox.innerHTML = `
+                <div class="report-section-title">${f.originalPeriod} Performance Ledger</div>
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>Cycle</th>
+                            <th style="text-align: right;">Total Income</th>
+                            <th style="text-align: right;">Total Spent</th>
+                            <th style="text-align: right;">Net Savings</th>
+                            <th style="text-align: right;">Savings Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${trs || '<tr><td colspan="5" style="text-align:center;">No transaction data found.</td></tr>'}
+                    </tbody>
+                </table>
+            `;
+            return;
+        }
 
         // Verify Checkbox selections
         const incBalance = document.getElementById('rep-inc-balance')?.checked;
@@ -8638,23 +8826,25 @@ catFilter, categoryIncome, categorySpent
                 const limit = parseFloat(cat.budget || 0);
                 if (limit <= 0) return;
 
-                const spent = f.monthlyTransactions
+                const scaledLimit = limit * f.numMonths;
+
+                const spent = f.periodTransactions
                     .filter(t => t.type === 'Expense' && t.category === name)
-                    .reduce((sum, t) => sum + t.amount, 0);
+                    .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
 
                 const rolled = parseFloat(cat.rolloverAmount || 0);
-                const effectiveBudget = limit + rolled;
+                const effectiveBudget = scaledLimit + rolled;
                 const variance = effectiveBudget - spent;
                 const isExceeded = spent > effectiveBudget;
 
-                totalBudgeted += limit;
+                totalBudgeted += scaledLimit;
                 totalSpent += spent;
                 totalVariance += variance;
 
                 trs += `
                     <tr>
                         <td>${name}</td>
-                        <td style="text-align: right;">${fmt(limit)}</td>
+                        <td style="text-align: right;">${fmt(scaledLimit)}</td>
                         <td style="text-align: right;">${fmt(spent)}</td>
                         <td style="text-align: right;" class="${variance >= 0 ? 'report-val-pos' : 'report-val-neg'}">${fmt(variance)}</td>
                         <td style="text-align: right; font-weight:700; color: ${isExceeded ? '#ff4d6d' : '#00ff88'};">${isExceeded ? 'EXCEEDED' : 'OK'}</td>
@@ -8697,7 +8887,7 @@ catFilter, categoryIncome, categorySpent
                 return;
             }
 
-            let txs = f.monthlyTransactions;
+            let txs = f.periodTransactions;
             if (f.catFilter !== 'all') {
                 txs = txs.filter(t => t.category === f.catFilter);
             }
@@ -8839,13 +9029,261 @@ catFilter, categoryIncome, categorySpent
             return currentY;
         };
 
+        const drawBalanceSheetContent = () => {
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+            doc.text('Corporate Balance Sheet Statement', 14, y);
+            y += 6;
+
+            // Render Assets Table Header
+            doc.setFontSize(8.5);
+            doc.setFillColor(bgHead[0], bgHead[1], bgHead[2]);
+            doc.rect(14, y, 182, 6, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(textHead[0], textHead[1], textHead[2]);
+            doc.text('Asset Class Account', 16, y + 4.5);
+            doc.text('Current Valuation', 194 - doc.getTextWidth('Current Valuation'), y + 4.5);
+            y += 6;
+
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+
+            // Liquid Cash
+            doc.text('Liquid Cash availability', 16, y + 5);
+            doc.text(fmt(f.availableCash), 194 - doc.getTextWidth(fmt(f.availableCash)), y + 5);
+            y += 7.5;
+
+            // Gullak
+            doc.text('Gullak Savings Vault Balance', 16, y + 5);
+            doc.text(fmt(f.totalGoalsSavings), 194 - doc.getTextWidth(fmt(f.totalGoalsSavings)), y + 5);
+            y += 7.5;
+
+            // Outstanding Lends (Receivables)
+            doc.text('Accounts Receivable (Outstanding Lends)', 16, y + 5);
+            doc.text(fmt(f.outstandingLendToOthers), 194 - doc.getTextWidth(fmt(f.outstandingLendToOthers)), y + 5);
+            y += 7.5;
+
+            // Lends breakdown by person name
+            if (incDebts && f.lendsByPerson.length > 0) {
+                doc.setFont('helvetica', 'italic');
+                doc.setFontSize(7.5);
+                doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+                f.lendsByPerson.forEach(p => {
+                    y = checkPageBreak(y, 6, 'Executive Portfolio Review');
+                    doc.text(`   • ${p.name}`, 18, y + 4);
+                    doc.text(fmt(p.amount), 190 - doc.getTextWidth(fmt(p.amount)), y + 4);
+                    y += 5.5;
+                });
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8.5);
+                doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+            }
+
+            // Portfolios
+            y = checkPageBreak(y, 15, 'Executive Portfolio Review');
+            doc.text('Wealth Hub Investment Portfolios', 16, y + 5);
+            doc.text(fmt(f.currentPortfolioTotal), 194 - doc.getTextWidth(fmt(f.currentPortfolioTotal)), y + 5);
+            y += 7.5;
+
+            // Total Assets Row
+            doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
+            doc.line(14, y, 196, y);
+            doc.setFont('helvetica', 'bold');
+            doc.text('TOTAL DECLARED ASSETS', 16, y + 5);
+            const aTotalStr = fmt(f.totalAssets);
+            doc.text(aTotalStr, 194 - doc.getTextWidth(aTotalStr), y + 5);
+            y += 10;
+
+            // Render Liabilities Header
+            y = checkPageBreak(y, 25, 'Executive Portfolio Review');
+            doc.setFillColor(bgHead[0], bgHead[1], bgHead[2]);
+            doc.rect(14, y, 182, 6, 'F');
+            doc.setTextColor(textHead[0], textHead[1], textHead[2]);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Liabilities & Capital Accounts', 16, y + 4.5);
+            doc.text('Capital Balance', 194 - doc.getTextWidth('Capital Balance'), y + 4.5);
+            y += 6;
+
+            // Accounts Payable
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+            doc.text('Accounts Payable (Owed to Others)', 16, y + 5);
+            doc.text(fmt(f.totalLiabilities), 194 - doc.getTextWidth(fmt(f.totalLiabilities)), y + 5);
+            y += 7.5;
+
+            // Debts breakdown by person name
+            if (incDebts && f.debtsByPerson.length > 0) {
+                doc.setFont('helvetica', 'italic');
+                doc.setFontSize(7.5);
+                doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+                f.debtsByPerson.forEach(p => {
+                    y = checkPageBreak(y, 6, 'Executive Portfolio Review');
+                    doc.text(`   • ${p.name}`, 18, y + 4);
+                    doc.text(fmt(p.amount), 190 - doc.getTextWidth(fmt(p.amount)), y + 4);
+                    y += 5.5;
+                });
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8.5);
+                doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+            }
+
+            // Total Liabilities Line
+            y = checkPageBreak(y, 15, 'Executive Portfolio Review');
+            doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
+            doc.line(14, y, 196, y);
+            doc.setFont('helvetica', 'bold');
+            doc.text('TOTAL DEBT LIABILITIES', 16, y + 5);
+            const lTotalStr = fmt(f.totalLiabilities);
+            doc.text(lTotalStr, 194 - doc.getTextWidth(lTotalStr), y + 5);
+            y += 7.5;
+
+            // Net Worth capital
+            doc.line(14, y, 196, y);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 150, 136); // Emerald Green
+            doc.text('NET WORTH EQUITY (ASSETS - LIABILITIES)', 16, y + 5);
+            const nwStr = fmt(f.netWorth);
+            doc.text(nwStr, 194 - doc.getTextWidth(nwStr), y + 5);
+            y += 12;
+
+            // Investor Health Ratios Cards
+            y = checkPageBreak(y, 30, 'Executive Portfolio Review');
+            doc.setFontSize(10.5);
+            doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Investor Portfolio Health KPI Ratios', 14, y);
+            y += 6;
+
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'normal');
+            doc.setFillColor(bgCard[0], bgCard[1], bgCard[2]);
+            doc.roundedRect(14, y, 56, 16, 1.5, 1.5, 'F');
+            doc.roundedRect(77, y, 56, 16, 1.5, 1.5, 'F');
+            doc.roundedRect(140, y, 56, 16, 1.5, 1.5, 'F');
+
+            // Ratio 1
+            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+            doc.text('Savings Efficiency', 17, y + 4.5);
+            doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`${f.savingsRate.toFixed(1)}% Saved`, 17, y + 11.5);
+
+            // Ratio 2
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+            doc.text('Emergency Coverage', 80, y + 4.5);
+            doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`${f.emergencyFundMonths.toFixed(1)} Mo Expenses`, 80, y + 11.5);
+
+            // Ratio 3
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+            doc.text('Debt-to-Asset Leverage', 143, y + 4.5);
+            doc.setTextColor(f.debtToAsset > 50 ? 255 : (isDark ? 0 : 15), f.debtToAsset > 50 ? 77 : (isDark ? 229 : 23), f.debtToAsset > 50 ? 109 : (isDark ? 255 : 42));
+            doc.setFont('helvetica', 'bold');
+            doc.text(`${f.debtToAsset.toFixed(1)}% Leverage`, 143, y + 11.5);
+            y += 20;
+        };
+
+        const isMonthWisePeriod = ["Month-Wise (All-Time)", "Year to Date (YTD)", "Fiscal Year (FY)", "Linear Year (Last 12M)"].includes(period);
+        if (isMonthWisePeriod && f.catFilter === 'all') {
+            drawPageBackground();
+            drawHeader(period);
+            
+            // Metadata Box
+            doc.setFillColor(bgCard[0], bgCard[1], bgCard[2]);
+            doc.roundedRect(14, 30, 182, 24, 2, 2, 'F');
+            
+            doc.setFontSize(8.5);
+            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+            doc.setFont('helvetica', 'bold');
+            doc.text('STATEMENT OWNER:', 18, 38);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+            doc.text(this.settings.username || 'Valued Client', 55, 38);
+
+            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+            doc.setFont('helvetica', 'bold');
+            doc.text('REPORTING CYCLE:', 18, 46);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+            doc.text(period, 55, 46);
+
+            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+            doc.setFont('helvetica', 'bold');
+            doc.text('GENERATION TIME:', 115, 38);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+            doc.text(new Date().toLocaleString('en-PK'), 152, 38);
+
+            // Draw Table Header
+            y = 65;
+            doc.setFillColor(bgHead[0], bgHead[1], bgHead[2]);
+            doc.rect(14, y, 182, 8, 'F');
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(textHead[0], textHead[1], textHead[2]);
+            doc.text('Reporting Cycle', 18, y + 5.5);
+            doc.text('Total Income', 70, y + 5.5);
+            doc.text('Total Spent', 105, y + 5.5);
+            doc.text('Net Savings', 140, y + 5.5);
+            doc.text('Savings Rate', 172, y + 5.5);
+            y += 8;
+
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+            
+            f.monthWiseSummaries.forEach(s => {
+                doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
+                doc.setLineWidth(0.2);
+                doc.line(14, y, 196, y);
+                
+                doc.text(s.month, 18, y + 5.5);
+                
+                doc.setTextColor(0, 150, 136);
+                doc.text(`+${fmt(s.income)}`, 70, y + 5.5);
+                
+                doc.setTextColor(255, 77, 109);
+                doc.text(`-${fmt(s.expense)}`, 105, y + 5.5);
+                
+                if (s.savings >= 0) {
+                    doc.setTextColor(0, 150, 136);
+                    doc.text(`+${fmt(s.savings)}`, 140, y + 5.5);
+                } else {
+                    doc.setTextColor(255, 77, 109);
+                    doc.text(`-${fmt(Math.abs(s.savings))}`, 140, y + 5.5);
+                }
+                
+                doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+                doc.text(`${s.savingsRate.toFixed(1)}%`, 172, y + 5.5);
+                
+                y += 8;
+                
+                if (y > 265) {
+                    drawFooter();
+                    doc.addPage();
+                    pageNum++;
+                    drawPageBackground();
+                    drawHeader(period);
+                    y = 30;
+                }
+            });
+            
+            drawFooter();
+        }
+
+
+
         // If a specific category filter is active, compile the Category-Specific Report
         if (f.catFilter !== 'all') {
             const catName = f.catFilter;
             const catObj = this.categories[catName] || { budget: 0, rolloverAmount: 0 };
             const limit = parseFloat(catObj.budget || 0);
+            const scaledLimit = limit * f.numMonths;
             const rolled = parseFloat(catObj.rolloverAmount || 0);
-            const effectiveBudget = limit + rolled;
+            const effectiveBudget = scaledLimit + rolled;
             const spent = f.categorySpent;
             const variance = effectiveBudget - spent;
             const isExceeded = spent > effectiveBudget;
@@ -8906,7 +9344,7 @@ catFilter, categoryIncome, categorySpent
             y += 6;
 
             const categoryStats = [
-                ['Base Allocated Limit', fmt(limit)],
+                ['Base Allocated Limit', fmt(scaledLimit)],
                 ['Rollover Carryover Balance', fmt(rolled)],
                 ['Effective Budget Capability', fmt(effectiveBudget)],
                 ['Actual Amount Spent', fmt(spent)]
@@ -8957,7 +9395,8 @@ catFilter, categoryIncome, categorySpent
             y += 6;
 
             const daysInMonth = new Date(new Date().getFullYear(), targetMonthIdx + 1, 0).getDate();
-            const dailyAvg = spent / daysInMonth;
+            const totalDays = daysInMonth * f.numMonths;
+            const dailyAvg = spent / totalDays;
             
             doc.setFontSize(8.5);
             doc.setFont('helvetica', 'normal');
@@ -8966,8 +9405,9 @@ catFilter, categoryIncome, categorySpent
             doc.text(`${fmt(dailyAvg)} / Day`, 194 - doc.getTextWidth(`${fmt(dailyAvg)} / Day`), y + 5.5);
             y += 8;
 
-            doc.text(`Projected monthly category spending target:`, 16, y + 5.5);
-            doc.text(fmt(dailyAvg * daysInMonth), 194 - doc.getTextWidth(fmt(dailyAvg * daysInMonth)), y + 5.5);
+            const projectionTarget = dailyAvg * daysInMonth * f.numMonths;
+            doc.text(f.isMonthWise ? `Projected period category spending target:` : `Projected monthly category spending target:`, 16, y + 5.5);
+            doc.text(fmt(projectionTarget), 194 - doc.getTextWidth(fmt(projectionTarget)), y + 5.5);
             y += 8;
 
             doc.text(`Budget Envelope Pacing Status:`, 16, y + 5.5);
@@ -8989,203 +9429,95 @@ catFilter, categoryIncome, categorySpent
             // --- STANDARD EXECUTIVE REPORT: ALL-TIME ALL-CATEGORIES ---
 
             // --- PAGE 1: COVER & BALANCE SHEET ---
-            drawPageBackground();
-            drawHeader("Executive Portfolio Review");
+            if (isMonthWisePeriod) {
+                if (incBalance) {
+                    doc.addPage();
+                    pageNum++;
+                    drawPageBackground();
+                    drawHeader("Executive Portfolio Review");
 
-            // Metadata Box
-            doc.setFillColor(bgCard[0], bgCard[1], bgCard[2]);
-            doc.roundedRect(14, 30, 182, 24, 2, 2, 'F');
-            
-            doc.setFontSize(8.5);
-            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-            doc.setFont('helvetica', 'bold');
-            doc.text('STATEMENT OWNER:', 18, 38);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(textMain[0], textMain[1], textMain[2]);
-            doc.text(this.settings.username || 'Valued Client', 55, 38);
-
-            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-            doc.setFont('helvetica', 'bold');
-            doc.text('REPORTING CYCLE:', 18, 46);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(textMain[0], textMain[1], textMain[2]);
-            doc.text(period, 55, 46);
-
-            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-            doc.setFont('helvetica', 'bold');
-            doc.text('GENERATION TIME:', 115, 38);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(textMain[0], textMain[1], textMain[2]);
-            doc.text(new Date().toLocaleString('en-PK'), 152, 38);
-
-            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-            doc.setFont('helvetica', 'bold');
-            doc.text('LEVERAGE TIER:', 115, 46);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(textMain[0], textMain[1], textMain[2]);
-            doc.text('Finance Sovereign (Tier 5)', 152, 46);
-
-            y = 65;
-
-            if (incBalance) {
-                doc.setFontSize(11);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-                doc.text('Corporate Balance Sheet Statement', 14, y);
-                y += 6;
-
-                // Render Assets Table Header
-                doc.setFontSize(8.5);
-                doc.setFillColor(bgHead[0], bgHead[1], bgHead[2]);
-                doc.rect(14, y, 182, 6, 'F');
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(textHead[0], textHead[1], textHead[2]);
-                doc.text('Asset Class Account', 16, y + 4.5);
-                doc.text('Current Valuation', 194 - doc.getTextWidth('Current Valuation'), y + 4.5);
-                y += 6;
-
-                doc.setFont('helvetica', 'normal');
-                doc.setTextColor(textMain[0], textMain[1], textMain[2]);
-
-                // Liquid Cash
-                doc.text('Liquid Cash availability', 16, y + 5);
-                doc.text(fmt(f.availableCash), 194 - doc.getTextWidth(fmt(f.availableCash)), y + 5);
-                y += 7.5;
-
-                // Gullak
-                doc.text('Gullak Savings Vault Balance', 16, y + 5);
-                doc.text(fmt(f.totalGoalsSavings), 194 - doc.getTextWidth(fmt(f.totalGoalsSavings)), y + 5);
-                y += 7.5;
-
-                // Outstanding Lends (Receivables)
-                doc.text('Accounts Receivable (Outstanding Lends)', 16, y + 5);
-                doc.text(fmt(f.outstandingLendToOthers), 194 - doc.getTextWidth(fmt(f.outstandingLendToOthers)), y + 5);
-                y += 7.5;
-
-                // Lends breakdown by person name
-                if (incDebts && f.lendsByPerson.length > 0) {
-                    doc.setFont('helvetica', 'italic');
-                    doc.setFontSize(7.5);
-                    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-                    f.lendsByPerson.forEach(p => {
-                        y = checkPageBreak(y, 6, "Executive Portfolio Review");
-                        doc.text(`   • ${p.name}`, 18, y + 4);
-                        doc.text(fmt(p.amount), 190 - doc.getTextWidth(fmt(p.amount)), y + 4);
-                        y += 5.5;
-                    });
-                    doc.setFont('helvetica', 'normal');
+                    // Metadata Box
+                    doc.setFillColor(bgCard[0], bgCard[1], bgCard[2]);
+                    doc.roundedRect(14, 30, 182, 24, 2, 2, 'F');
+                    
                     doc.setFontSize(8.5);
-                    doc.setTextColor(textMain[0], textMain[1], textMain[2]);
-                }
-
-                // Portfolios
-                y = checkPageBreak(y, 15, "Executive Portfolio Review");
-                doc.text('Wealth Hub Investment Portfolios', 16, y + 5);
-                doc.text(fmt(f.currentPortfolioTotal), 194 - doc.getTextWidth(fmt(f.currentPortfolioTotal)), y + 5);
-                y += 7.5;
-
-                // Total Assets Row
-                doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
-                doc.line(14, y, 196, y);
-                doc.setFont('helvetica', 'bold');
-                doc.text('TOTAL DECLARED ASSETS', 16, y + 5);
-                const aTotalStr = fmt(f.totalAssets);
-                doc.text(aTotalStr, 194 - doc.getTextWidth(aTotalStr), y + 5);
-                y += 10;
-
-                // Render Liabilities Header
-                y = checkPageBreak(y, 25, "Executive Portfolio Review");
-                doc.setFillColor(bgHead[0], bgHead[1], bgHead[2]);
-                doc.rect(14, y, 182, 6, 'F');
-                doc.setTextColor(textHead[0], textHead[1], textHead[2]);
-                doc.setFont('helvetica', 'bold');
-                doc.text('Liabilities & Capital Accounts', 16, y + 4.5);
-                doc.text('Capital Balance', 194 - doc.getTextWidth('Capital Balance'), y + 4.5);
-                y += 6;
-
-                // Accounts Payable
-                doc.setFont('helvetica', 'normal');
-                doc.setTextColor(textMain[0], textMain[1], textMain[2]);
-                doc.text('Accounts Payable (Owed to Others)', 16, y + 5);
-                doc.text(fmt(f.totalLiabilities), 194 - doc.getTextWidth(fmt(f.totalLiabilities)), y + 5);
-                y += 7.5;
-
-                // Debts breakdown by person name
-                if (incDebts && f.debtsByPerson.length > 0) {
-                    doc.setFont('helvetica', 'italic');
-                    doc.setFontSize(7.5);
                     doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-                    f.debtsByPerson.forEach(p => {
-                        y = checkPageBreak(y, 6, "Executive Portfolio Review");
-                        doc.text(`   • ${p.name}`, 18, y + 4);
-                        doc.text(fmt(p.amount), 190 - doc.getTextWidth(fmt(p.amount)), y + 4);
-                        y += 5.5;
-                    });
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('STATEMENT OWNER:', 18, 38);
                     doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(8.5);
                     doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+                    doc.text(this.settings.username || 'Valued Client', 55, 38);
+
+                    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('REPORTING CYCLE:', 18, 46);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+                    doc.text(period, 55, 46);
+
+                    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('GENERATION TIME:', 115, 38);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+                    doc.text(new Date().toLocaleString('en-PK'), 152, 38);
+
+                    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('LEVERAGE TIER:', 115, 46);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+                    doc.text('Finance Sovereign (Tier 5)', 152, 46);
+
+                    y = 65;
+                    drawBalanceSheetContent();
+                    drawFooter();
                 }
+            } else {
+                drawPageBackground();
+                drawHeader("Executive Portfolio Review");
 
-                // Total Liabilities Line
-                y = checkPageBreak(y, 15, "Executive Portfolio Review");
-                doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
-                doc.line(14, y, 196, y);
-                doc.setFont('helvetica', 'bold');
-                doc.text('TOTAL DEBT LIABILITIES', 16, y + 5);
-                const lTotalStr = fmt(f.totalLiabilities);
-                doc.text(lTotalStr, 194 - doc.getTextWidth(lTotalStr), y + 5);
-                y += 7.5;
-
-                // Net Worth capital
-                doc.line(14, y, 196, y);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(0, 150, 136); // Emerald Green
-                doc.text('NET WORTH EQUITY (ASSETS - LIABILITIES)', 16, y + 5);
-                const nwStr = fmt(f.netWorth);
-                doc.text(nwStr, 194 - doc.getTextWidth(nwStr), y + 5);
-                y += 12;
-
-                // Investor Health Ratios Cards
-                y = checkPageBreak(y, 30, "Executive Portfolio Review");
-                doc.setFontSize(10.5);
-                doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-                doc.setFont('helvetica', 'bold');
-                doc.text('Investor Portfolio Health KPI Ratios', 14, y);
-                y += 6;
-
-                doc.setFontSize(8);
-                doc.setFont('helvetica', 'normal');
+                // Metadata Box
                 doc.setFillColor(bgCard[0], bgCard[1], bgCard[2]);
-                doc.roundedRect(14, y, 56, 16, 1.5, 1.5, 'F');
-                doc.roundedRect(77, y, 56, 16, 1.5, 1.5, 'F');
-                doc.roundedRect(140, y, 56, 16, 1.5, 1.5, 'F');
-
-                // Ratio 1
+                doc.roundedRect(14, 30, 182, 24, 2, 2, 'F');
+                
+                doc.setFontSize(8.5);
                 doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-                doc.text('Savings Efficiency', 17, y + 4.5);
-                doc.setTextColor(textMain[0], textMain[1], textMain[2]);
                 doc.setFont('helvetica', 'bold');
-                doc.text(`${f.savingsRate.toFixed(1)}% Saved`, 17, y + 11.5);
-
-                // Ratio 2
+                doc.text('STATEMENT OWNER:', 18, 38);
                 doc.setFont('helvetica', 'normal');
-                doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-                doc.text('Emergency Coverage', 80, y + 4.5);
                 doc.setTextColor(textMain[0], textMain[1], textMain[2]);
-                doc.setFont('helvetica', 'bold');
-                doc.text(`${f.emergencyFundMonths.toFixed(1)} Mo Expenses`, 80, y + 11.5);
+                doc.text(this.settings.username || 'Valued Client', 55, 38);
 
-                // Ratio 3
-                doc.setFont('helvetica', 'normal');
                 doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-                doc.text('Debt-to-Asset Leverage', 143, y + 4.5);
-                doc.setTextColor(f.debtToAsset > 50 ? 255 : (isDark ? 0 : 15), f.debtToAsset > 50 ? 77 : (isDark ? 229 : 23), f.debtToAsset > 50 ? 109 : (isDark ? 255 : 42));
                 doc.setFont('helvetica', 'bold');
-                doc.text(`${f.debtToAsset.toFixed(1)}% Leverage`, 143, y + 11.5);
-                y += 20;
+                doc.text('REPORTING CYCLE:', 18, 46);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+                doc.text(period, 55, 46);
+
+                doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+                doc.setFont('helvetica', 'bold');
+                doc.text('GENERATION TIME:', 115, 38);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+                doc.text(new Date().toLocaleString('en-PK'), 152, 38);
+
+                doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+                doc.setFont('helvetica', 'bold');
+                doc.text('LEVERAGE TIER:', 115, 46);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(textMain[0], textMain[1], textMain[2]);
+                doc.text('Finance Sovereign (Tier 5)', 152, 46);
+
+                y = 65;
+
+                if (incBalance) {
+                    drawBalanceSheetContent();
+                }
+
+                drawFooter();
             }
-
-            drawFooter();
 
             // --- PAGE 2: CASH FLOW PACING & RECURRING BILLS ---
             if (incCashflow || incGullaks || incWealth) {
@@ -9208,11 +9540,14 @@ catFilter, categoryIncome, categorySpent
                     doc.setFont('helvetica', 'normal');
                     doc.setTextColor(textMain[0], textMain[1], textMain[2]);
                     
-                    doc.text('Gross Monthly Cash Receipts (Income):', 16, y + 5);
+                    const incomeLabel = f.isMonthWise ? 'Gross Period Cash Receipts (Income):' : 'Gross Monthly Cash Receipts (Income):';
+                    const expenseLabel = f.isMonthWise ? 'Gross Period Expenses & Payments:' : 'Gross Monthly Expenses & Payments:';
+
+                    doc.text(incomeLabel, 16, y + 5);
                     doc.text(fmt(f.totalIncome), 194 - doc.getTextWidth(fmt(f.totalIncome)), y + 5);
                     y += 7.5;
 
-                    doc.text('Gross Monthly Expenses & Payments:', 16, y + 5);
+                    doc.text(expenseLabel, 16, y + 5);
                     doc.text(fmt(f.totalSpent), 194 - doc.getTextWidth(fmt(f.totalSpent)), y + 5);
                     y += 7.5;
 
@@ -9337,20 +9672,22 @@ catFilter, categoryIncome, categorySpent
 
                         y = checkPageBreak(y, 8, "Budget Variance Analysis");
 
-                        const spent = f.monthlyTransactions
+                        const scaledLimit = limit * f.numMonths;
+
+                        const spent = f.periodTransactions
                             .filter(t => t.type === 'Expense' && t.category === name)
                             .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
 
                         const rolled = parseFloat(cat.rolloverAmount || 0);
-                        const effectiveBudget = limit + rolled;
+                        const effectiveBudget = scaledLimit + rolled;
                         const variance = effectiveBudget - spent;
 
-                        totalBudgeted += limit;
+                        totalBudgeted += scaledLimit;
                         totalSpent += spent;
                         totalVariance += variance;
 
                         doc.text(name, 16, y + 5.5);
-                        doc.text(fmt(limit), 80, y + 5.5);
+                        doc.text(fmt(scaledLimit), 80, y + 5.5);
                         doc.text(fmt(spent), 120, y + 5.5);
                         
                         doc.setFont('helvetica', 'bold');
@@ -9387,7 +9724,7 @@ catFilter, categoryIncome, categorySpent
 
         // --- PAGE 4: DETAILED TRANSACTION LEDGER ---
         if (incLedger) {
-            let txs = f.monthlyTransactions;
+            let txs = f.periodTransactions;
             if (f.catFilter !== 'all') {
                 txs = txs.filter(t => t.category === f.catFilter);
             }
