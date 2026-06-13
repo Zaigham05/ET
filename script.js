@@ -267,6 +267,7 @@ class SpendWise {
 
         this.initFirebase();
         this.updateSyncStatus();
+        this.migrateSplitLends();
         this.updateUI();
         this.startTickerSystem();
         this.updateMobileFab('dashboard');
@@ -6868,10 +6869,27 @@ class SpendWise {
             date: new Date().toISOString().split('T')[0],
             person: this.settings.username || 'You', // Trace creator's own name instead of first group member
             note: `[Split: ${title}] - Personal portion of group bill.`,
-            notes: `[Split: ${title}] - Personal portion of group bill.`
+            notes: `[Split: ${title}] - Personal portion of group bill.`,
+            splitId: id
         };
 
         this.transactions.push(transaction);
+
+        // Post a Lend transaction for each of the other members
+        members.forEach(member => {
+            const lendTx = {
+                id: ++this.lastTransactionId,
+                type: 'Lend',
+                category,
+                amount: personalShare,
+                date: new Date().toISOString().split('T')[0],
+                person: member,
+                note: `[Split: ${title}] - Share lent to ${member}`,
+                notes: `[Split: ${title}] - Share lent to ${member}`,
+                splitId: id
+            };
+            this.transactions.push(lendTx);
+        });
         this.logAction('CREATE', `Split Transaction: ${title}`, `Logged split personal cost.`);
         this.showToast('Group Split calculated & posted!', 'success');
 
@@ -6888,12 +6906,17 @@ class SpendWise {
 
         this.confirmDialog(`Are you sure you want to delete the split bill "${this.sharedWallets[splitIndex].title}"?`, 'trash-2').then(ok => {
             if (ok) {
+                const split = this.sharedWallets[splitIndex];
+                // Clean up associated transactions
+                this.transactions = this.transactions.filter(t => t.splitId !== split.id);
+                
                 this.sharedWallets.splice(splitIndex, 1);
-                this.logSharedActivity('user', `Deleted a split bill.`);
+                this.logSharedActivity('user', `Deleted split bill "${split.title}" and its ledger entries.`);
                 this.showToast(`Split bill deleted!`, 'success');
                 
                 this.saveToLocal();
                 this.saveToCloud();
+                this.updateUI();
                 this.renderSharedWallets();
             }
         });
@@ -6924,7 +6947,8 @@ class SpendWise {
                             date: new Date().toISOString().split('T')[0],
                             person: member,
                             note: `Split Settled: ${member} paid share for "${split.title}"`,
-                            notes: `Split Settled: ${member} paid share for "${split.title}"`
+                            notes: `Split Settled: ${member} paid share for "${split.title}"`,
+                            splitId: split.id
                         };
                         this.transactions.push(transaction);
                     }
@@ -6963,7 +6987,8 @@ class SpendWise {
                         date: new Date().toISOString().split('T')[0],
                         person: member,
                         note: `Split Settled: ${member} paid share for "${split.title}"`,
-                        notes: `Split Settled: ${member} paid share for "${split.title}"`
+                        notes: `Split Settled: ${member} paid share for "${split.title}"`,
+                        splitId: split.id
                     };
                     this.transactions.push(transaction);
                 }
@@ -9678,6 +9703,61 @@ catFilter, categoryIncome, categorySpent
                     <button onclick="this.parentElement.parentElement.remove()" style="background: #ff4d6d; border: none; border-radius: 6px; padding: 4px 10px; color: #fff; font-size: 0.75rem; font-weight: 700; cursor: pointer;">Close</button>
                 </div>
             `;
+        }
+    }
+
+    migrateSplitLends() {
+        let changed = false;
+        (this.sharedWallets || []).forEach(split => {
+            const shareOwed = parseFloat(split.totalCost) / (split.members.length + 1);
+            const timestamp = parseInt(split.id.replace('split_', ''), 10);
+            const dateStr = !isNaN(timestamp) ? new Date(timestamp).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+
+            // 1. Tag existing Expense transaction if missing splitId
+            this.transactions.forEach(t => {
+                if (t.type === 'Expense' && !t.splitId && t.note && t.note.includes(`[Split: ${split.title}]`)) {
+                    t.splitId = split.id;
+                    changed = true;
+                }
+            });
+
+            // 2. Tag existing Repay transactions if missing splitId
+            split.members.forEach(member => {
+                this.transactions.forEach(t => {
+                    if (t.type === 'Repay' && t.person === member && !t.splitId && t.note && t.note.includes(`Split Settled: ${member} paid share for "${split.title}"`)) {
+                        t.splitId = split.id;
+                        changed = true;
+                    }
+                });
+
+                // 3. Check and create Lend transaction if missing
+                const lendExists = this.transactions.some(t =>
+                    t.type === 'Lend' &&
+                    t.person === member &&
+                    (t.splitId === split.id || (t.note && t.note.includes(`[Split: ${split.title}]`) && t.note.includes(`Share lent to ${member}`)))
+                );
+
+                if (!lendExists) {
+                    const lendTx = {
+                        id: ++this.lastTransactionId,
+                        type: 'Lend',
+                        category: split.category || 'Debt',
+                        amount: shareOwed,
+                        date: dateStr,
+                        person: member,
+                        note: `[Split: ${split.title}] - Share lent to ${member}`,
+                        notes: `[Split: ${split.title}] - Share lent to ${member}`,
+                        splitId: split.id
+                    };
+                    this.transactions.push(lendTx);
+                    changed = true;
+                }
+            });
+        });
+
+        if (changed) {
+            this.saveToLocal();
+            this.saveToCloud();
         }
     }
 
