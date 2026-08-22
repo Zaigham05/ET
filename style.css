@@ -1719,19 +1719,73 @@ select option {
 .debt-mini-history {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+}
+
+.debt-mini-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    max-height: 240px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.debt-mini-history-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.debt-mini-history-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
 }
 
 .mini-item {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     font-size: 0.85rem;
     color: var(--text-muted);
+    padding: 4px 0;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+}
+
+.mini-item:last-child {
+    border-bottom: none;
 }
 
 .mini-amount {
     color: var(--text);
-    font-weight: 500;
+    font-weight: 600;
+}
+
+.mini-amount.amount-in {
+    color: #10b981;
+}
+
+.mini-amount.amount-out {
+    color: #ff4d6d;
+}
+
+.mini-type-badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    line-height: 1;
+}
+
+.mini-type-badge.badge-in {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.mini-type-badge.badge-out {
+    background: rgba(255, 77, 109, 0.15);
+    color: #ff4d6d;
+    border: 1px solid rgba(255, 77, 109, 0.3);
 }
 
 /* Debt Vault Actions & WhatsApp Sharing Card Modal */

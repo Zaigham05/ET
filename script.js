@@ -3651,7 +3651,7 @@ class SpendWise {
 
             const hasOverdue = data.history.some(h => h.dueDate && new Date(h.dueDate) < new Date() && balance !== 0);
 
-            const recentHistory = data.history.slice(0, 3).map(h => {
+            const fullHistory = data.history.map(h => {
                 const now = new Date();
                 const due = h.dueDate ? new Date(h.dueDate) : null;
                 const isOverdue = due && due < now && balance !== 0;
@@ -3670,13 +3670,21 @@ class SpendWise {
                     }
                 }
 
+                const isMoneyIn = ['Borrow', 'Repay'].includes(h.type);
+                const amountSign = isMoneyIn ? '+' : '-';
+                const amountClass = isMoneyIn ? 'amount-in' : 'amount-out';
+                const badgeClass = isMoneyIn ? 'badge-in' : 'badge-out';
+
                 return `
                     <div class="mini-item ${isOverdue ? 'item-overdue' : ''}">
-                        <div style="display:flex; flex-direction:column;">
-                            <span class="mini-note">${h.note || h.type}</span>
+                        <div style="display:flex; flex-direction:column; gap:2px;">
+                            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                                <span class="mini-note">${h.note || h.type}</span>
+                                <span class="mini-type-badge ${badgeClass}">${h.type}</span>
+                            </div>
                             <span class="mini-date">${dueDisplay || new Date(h.date).toLocaleDateString('en-PK', { month: 'short', day: 'numeric' })}</span>
                         </div>
-                        <span class="mini-amount">${this.formatCurrency(h.amount)}</span>
+                        <span class="mini-amount sovereign-shield ${amountClass}">${amountSign}${this.formatCurrency(h.amount)}</span>
                     </div>
                 `;
             }).join('');
@@ -3694,8 +3702,12 @@ class SpendWise {
                         ${this.formatCurrency(Math.abs(balance))}
                     </div>
                     <div class="debt-mini-history">
-                        <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 700;">RECENT ACTIVITY</p>
-                        ${recentHistory}
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <p style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; margin: 0;">TRANSACTION HISTORY (${data.history.length})</p>
+                        </div>
+                        <div class="debt-mini-history-list">
+                            ${fullHistory}
+                        </div>
                     </div>
                     ${balance !== 0 ? `
                         <div class="debt-card-actions">
